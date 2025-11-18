@@ -112,54 +112,18 @@ try {
     $jadwal_list = [];
 }
 
-// Get statistik
-// - If no specific balita selected (null) => global counts
-// - If a specific balita selected (>0) => compute counts for that balita only
-// - Otherwise (fallback) use the existing filtered whereClause
-if ($selected_balita === null) {
-    try {
-        $stmt_stats = $conn->query("SELECT 
-            COUNT(*) as total,
-            SUM(CASE WHEN status = 'terjadwal' THEN 1 ELSE 0 END) as terjadwal,
-            SUM(CASE WHEN status = 'selesai' THEN 1 ELSE 0 END) as selesai,
-            SUM(CASE WHEN LOWER(jenis) LIKE '%imunisasi%' THEN 1 ELSE 0 END) as imunisasi,
-            SUM(CASE WHEN LOWER(jenis) LIKE '%konsultasi%' THEN 1 ELSE 0 END) as konsultasi
-            FROM jadwal");
-        $stats = $stmt_stats->fetch(PDO::FETCH_ASSOC);
-    } catch (Exception $e) {
-        $stats = ['total' => 0, 'terjadwal' => 0, 'selesai' => 0, 'imunisasi' => 0, 'konsultasi' => 0];
-    }
-} elseif (is_numeric($selected_balita) && (int)$selected_balita > 0) {
-    // Specific balita counts
-    try {
-        $stmt_stats = $conn->prepare("SELECT 
-            COUNT(*) as total,
-            SUM(CASE WHEN status = 'terjadwal' THEN 1 ELSE 0 END) as terjadwal,
-            SUM(CASE WHEN status = 'selesai' THEN 1 ELSE 0 END) as selesai,
-            SUM(CASE WHEN LOWER(jenis) LIKE '%imunisasi%' THEN 1 ELSE 0 END) as imunisasi,
-            SUM(CASE WHEN LOWER(jenis) LIKE '%konsultasi%' THEN 1 ELSE 0 END) as konsultasi
-            FROM jadwal WHERE id_balita = ?");
-        $stmt_stats->execute([(int)$selected_balita]);
-        $stats = $stmt_stats->fetch(PDO::FETCH_ASSOC);
-    } catch (Exception $e) {
-        $stats = ['total' => 0, 'terjadwal' => 0, 'selesai' => 0, 'imunisasi' => 0, 'konsultasi' => 0];
-    }
-} else {
-    // fallback to previous filtered behavior
-    $query_stats = "SELECT 
-                COUNT(*) as total,
-                SUM(CASE WHEN status = 'terjadwal' THEN 1 ELSE 0 END) as terjadwal,
-                SUM(CASE WHEN status = 'selesai' THEN 1 ELSE 0 END) as selesai,
-                SUM(CASE WHEN LOWER(jenis) LIKE '%imunisasi%' THEN 1 ELSE 0 END) as imunisasi,
-                SUM(CASE WHEN LOWER(jenis) LIKE '%konsultasi%' THEN 1 ELSE 0 END) as konsultasi
-                FROM jadwal 
-                WHERE " . $whereClause;
-    $stmt_stats = $conn->prepare($query_stats);
-    try {
-        $stmt_stats->execute($params);
-        $stats = $stmt_stats->fetch(PDO::FETCH_ASSOC);
-    } catch (Exception $e) {
-        $stats = ['total' => 0, 'terjadwal' => 0, 'selesai' => 0, 'imunisasi' => 0, 'konsultasi' => 0];
+// Compute statistik from the already-fetched $jadwal_list to ensure counts match displayed rows
+$stats = ['total' => 0, 'terjadwal' => 0, 'selesai' => 0, 'imunisasi' => 0, 'konsultasi' => 0];
+if (is_array($jadwal_list)) {
+    foreach ($jadwal_list as $r) {
+        $stats['total']++;
+        $st = $r['status'] ?? '';
+        if ($st === 'terjadwal') $stats['terjadwal']++;
+        if ($st === 'selesai') $stats['selesai']++;
+
+        $j = strtolower($r['jenis'] ?? '');
+        if (strpos($j, 'imunisasi') !== false) $stats['imunisasi']++;
+        if (strpos($j, 'konsultasi') !== false) $stats['konsultasi']++;
     }
 }
 

@@ -58,24 +58,28 @@ $params2[] = $offset;
 
 // Select columns and alias to match existing template keys (judul, ringkasan, created_at, id)
 $sql = "SELECT id_artikel AS id,
-        judul_artikel AS judul,
-        isi_artikel AS ringkasan,
-        tgl_terbit AS created_at,
-        penulis,
-        gambar_cover AS gambar,
-        views,
-          kategori
-      FROM artikel
-      WHERE $whereClause
-      ORDER BY tgl_terbit DESC
-      LIMIT :limit OFFSET :offset";
+                judul_artikel AS judul,
+                isi_artikel AS ringkasan,
+                tgl_terbit AS created_at,
+                penulis,
+                gambar_cover AS gambar,
+                views,
+                    kategori
+            FROM artikel
+            WHERE $whereClause
+            ORDER BY tgl_terbit DESC
+            LIMIT ? OFFSET ?";
 $stmt = $conn->prepare($sql);
-// Bind filter params
-for ($i = 0; $i < count($params); $i++) {
-    $stmt->bindValue($i+1, $params[$i]);
+// Bind filter params (positional) then bind limit/offset as integers to avoid them being treated as strings
+$paramIndex = 1;
+foreach ($params as $p) {
+    $stmt->bindValue($paramIndex, $p);
+    $paramIndex++;
 }
-$stmt->bindValue(':limit', $limit, PDO::PARAM_INT);
-$stmt->bindValue(':offset', $offset, PDO::PARAM_INT);
+$stmt->bindValue($paramIndex, (int)$limit, PDO::PARAM_INT);
+$paramIndex++;
+$stmt->bindValue($paramIndex, (int)$offset, PDO::PARAM_INT);
+
 $stmt->execute();
 $artikelList = $stmt->fetchAll();
 
