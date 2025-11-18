@@ -14,18 +14,39 @@ $error = '';
 $mode = 'list'; // Mode: list, add, edit
 $edit_data = null;
 
+// Ensure $user is defined (some pages expect this)
+$user = ['nama' => '', 'role' => $_SESSION['role'] ?? 'pengguna'];
+// Optional redirect target (passed when opening the add form).
+// If provided, after creating a new balita we will redirect to that target with the new id.
+$redirect = '';
+if (isset($_GET['redirect'])) $redirect = $_GET['redirect'];
+if (isset($_POST['redirect'])) $redirect = $_POST['redirect'];
+try {
+    $s = $conn->prepare('SELECT nama FROM akun WHERE id_akun = ?');
+    $s->bind_param('i', $id_akun);
+    $s->execute();
+    $r = $s->get_result();
+    $rowu = $r->fetch_assoc();
+    if ($rowu && !empty($rowu['nama'])) $user['nama'] = $rowu['nama'];
+} catch (Exception $e) {
+    // ignore
+}
+
 // ========== PROSES HAPUS DATA ==========
 if (isset($_GET['action']) && $_GET['action'] == 'delete' && isset($_GET['id'])) {
     $id_balita = $_GET['id'];
-    
-    // Verifikasi bahwa balita ini milik user yang login
-    $query_verify = "SELECT id_balita FROM balita WHERE id_balita = ? AND id_akun = ?";
-    $stmt = $conn->prepare($query_verify);
-    $stmt->bind_param("ii", $id_balita, $id_akun);
-    $stmt->execute();
-    $result = $stmt->get_result();
-    
-    if ($result->num_rows > 0) {
+    // Only 'pengguna' can delete their balita
+    if (($user['role'] ?? '') !== 'pengguna') {
+        $error = 'Akses ditolak: hanya orang tua (pengguna) yang dapat menghapus balita.';
+    } else {
+        // Verifikasi bahwa balita ini milik user yang login
+        $query_verify = "SELECT id_balita FROM balita WHERE id_balita = ? AND id_akun = ?";
+        $stmt = $conn->prepare($query_verify);
+        $stmt->bind_param("ii", $id_balita, $id_akun);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        
+        if ($result->num_rows > 0) {
     // Hapus data balita (akan menghapus data pertumbuhan terkait karena CASCADE)
     // Batasi penghapusan hanya pada baris milik akun yang login untuk menghindari
     // kondisi di mana id_balita tertukar dengan id_akun lain.
@@ -38,13 +59,20 @@ if (isset($_GET['action']) && $_GET['action'] == 'delete' && isset($_GET['id']))
         } else {
             $error = "Gagal menghapus data!";
         }
-    } else {
-        $error = "Data tidak ditemukan atau Anda tidak memiliki akses!";
+        } else {
+            $error = "Data tidak ditemukan atau Anda tidak memiliki akses!";
+        }
     }
 }
 
 // ========== PROSES TAMBAH/UPDATE DATA ==========
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    // Only 'pengguna' (parents) may add or update balita via this form
+    if (($user['role'] ?? '') !== 'pengguna') {
+        $error = 'Akses ditolak: Anda tidak memiliki izin untuk menambah atau mengedit data balita di halaman ini.';
+        // keep mode as list to avoid processing
+        $mode = 'list';
+    } else {
     $nama_balita = trim($_POST['nama_balita']);
     $tanggal_lahir = $_POST['tanggal_lahir'];
     $jenis_kelamin = $_POST['jenis_kelamin'];
@@ -95,13 +123,34 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                     $stmt = $conn->prepare($query_insert);
                     $stmt->bind_param("issss", $id_akun, $nama_balita, $tanggal_lahir, $jenis_kelamin, $alamat_balita);
                     
-                    if ($stmt->execute()) {
-                        $message = "Data balita berhasil ditambahkan!";
-                        $mode = 'list';
-                    } else {
-                        $error = "Gagal menyimpan data: " . $conn->error;
-                        $mode = 'add';
-                    }
+                            if ($stmt->execute()) {
+                                // Newly inserted id (mysqli)
+                                $newId = $conn->insert_id;
+                                // If a redirect target was provided, build the target URL and redirect
+                                if (!empty($_POST['redirect'])) {
+                                    $target = $_POST['redirect'];
+                                    // If the target contains a {id} placeholder, replace it
+                                    if (strpos($target, '{id}') !== false) {
+                                        $target = str_replace('{id}', $newId, $target);
+                                    } else {
+                                        // Append id_balita param
+                                        if (strpos($target, '?') !== false) {
+                                            $target .= '&id_balita=' . $newId;
+                                        } else {
+                                            $target .= '?id_balita=' . $newId;
+                                        }
+                                    }
+                                    header('Location: ' . $target);
+                                    exit;
+                                }
+
+                                $message = "Data balita berhasil ditambahkan!";
+                                $mode = 'list';
+                            } else {
+                                $error = "Gagal menyimpan data: " . $conn->error;
+                                $mode = 'add';
+                            }
+        }
                 }
             }
         }
@@ -133,16 +182,28 @@ if (isset($_GET['action'])) {
 
 // ========== AMBIL DATA UNTUK LIST ==========
 if ($mode == 'list') {
-    $query_balita = "SELECT b.id_balita, b.nama_balita, b.tanggal_lahir, 
-                     b.jenis_kelamin, b.alamat_balita, b.created_at,
-                     TIMESTAMPDIFF(MONTH, b.tanggal_lahir, CURDATE()) as usia_bulan
-                     FROM balita b 
-                     WHERE b.id_akun = ?
-                     ORDER BY b.created_at DESC";
-    $stmt = $conn->prepare($query_balita);
-    $stmt->bind_param("i", $id_akun);
-    $stmt->execute();
-    $result_balita = $stmt->get_result();
+    if (($user['role'] ?? '') === 'pengguna') {
+        $query_balita = "SELECT b.id_balita, b.nama_balita, b.tanggal_lahir, 
+                         b.jenis_kelamin, b.alamat_balita, b.created_at,
+                         TIMESTAMPDIFF(MONTH, b.tanggal_lahir, CURDATE()) as usia_bulan
+                         FROM balita b 
+                         WHERE b.id_akun = ?
+                         ORDER BY b.created_at DESC";
+        $stmt = $conn->prepare($query_balita);
+        $stmt->bind_param("i", $id_akun);
+        $stmt->execute();
+        $result_balita = $stmt->get_result();
+    } else {
+        // Tenaga Kesehatan: show registered balita (all balita) for viewing only
+        $query_balita = "SELECT b.id_balita, b.nama_balita, b.tanggal_lahir, 
+                         b.jenis_kelamin, b.alamat_balita, b.created_at,
+                         TIMESTAMPDIFF(MONTH, b.tanggal_lahir, CURDATE()) as usia_bulan,
+                         a.nama as nama_ortu, a.id_akun as id_ortu_akun
+                         FROM balita b
+                         LEFT JOIN akun a ON b.id_akun = a.id_akun
+                         ORDER BY b.created_at DESC";
+        $result_balita = $conn->query($query_balita);
+    }
 }
 
 // Fungsi untuk menghitung usia
@@ -630,11 +691,20 @@ function hitungUsia($tanggal_lahir) {
             <?php endif; ?>
 
             <!-- Add Button -->
-            <div style="margin-bottom: 20px;">
-                <button class="btn btn-primary" onclick="location.href='data_balita.php?action=add'">
-                    <i class="fas fa-plus"></i> Tambah Balita
-                </button>
-            </div>
+                    <?php if (($user['role'] ?? '') == 'pengguna'): ?>
+                    <?php
+                        // Build add URL optionally preserving redirect target
+                        $addUrl = 'data_balita.php?action=add';
+                        if (!empty($redirect)) {
+                            $addUrl .= '&redirect=' . urlencode($redirect);
+                        }
+                    ?>
+                    <div style="margin-bottom: 20px;">
+                        <a class="btn btn-primary" href="<?php echo $addUrl; ?>">
+                            <i class="fas fa-plus"></i> Tambah Balita
+                        </a>
+                    </div>
+                    <?php endif; ?>
 
             <!-- Data Balita -->
             <?php if ($result_balita->num_rows > 0): ?>
@@ -677,12 +747,28 @@ function hitungUsia($tanggal_lahir) {
                     </div>
                     
                     <div class="balita-actions">
+                        <?php if (($user['role'] ?? '') == 'pengguna'): ?>
                         <button class="btn-icon-white" onclick="location.href='data_balita.php?action=edit&id=<?php echo $row['id_balita']; ?>'" title="Edit">
                             <i class="fas fa-edit"></i>
                         </button>
                         <button class="btn-icon-white" onclick="hapusBalita(<?php echo $row['id_balita']; ?>)" title="Hapus">
                             <i class="fas fa-trash"></i>
                         </button>
+                        <button class="btn btn-secondary" onclick="location.href='pertumbuhan.php?id=<?php echo $row['id_balita']; ?>'" title="Lihat Pertumbuhan">
+                            <i class="fas fa-chart-line"></i> Pertumbuhan
+                        </button>
+                        <?php else: ?>
+                        <!-- Tenaga Kesehatan: view-only controls -->
+                        <button class="btn btn-secondary" onclick="location.href='status_gizi.php?id_balita=<?php echo $row['id_balita']; ?>'" title="Lihat Status Gizi">
+                            <i class="fas fa-heartbeat"></i> Lihat Status Gizi
+                        </button>
+                        <a class="btn btn-secondary" href="akun_detail.php?id=<?php echo $row['id_ortu_akun'] ?? ($row['id_akun'] ?? ''); ?>">
+                            <i class="fas fa-user"></i> Lihat Orang Tua
+                        </a>
+                        <a class="btn btn-secondary" href="pertumbuhan.php?id=<?php echo $row['id_balita']; ?>">
+                            <i class="fas fa-chart-line"></i> Lihat Pertumbuhan
+                        </a>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <?php endwhile; ?>
@@ -723,6 +809,7 @@ function hitungUsia($tanggal_lahir) {
                     <?php endif; ?>
 
                 <form method="POST" action="">
+                    <input type="hidden" name="redirect" value="<?php echo htmlspecialchars($redirect); ?>">
                     <?php if ($mode == 'edit'): ?>
                     <input type="hidden" name="id_balita" value="<?php echo $edit_data['id_balita']; ?>">
                     <?php endif; ?>

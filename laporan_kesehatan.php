@@ -7,6 +7,9 @@ requireLogin();
 
 $conn = getDBConnection();
 $id_akun = $_SESSION['id_akun'];
+
+// determine role (fall back to session role if available)
+$role = $_SESSION['role'] ?? null;
 $message = '';
 $error = '';
 
@@ -30,25 +33,54 @@ $stmt->execute();
 $result = $stmt->get_result();
 $user = $result->fetch_assoc();
 
-// Get all balita for this user
-$stmt = $conn->prepare("SELECT id_balita, nama_balita, jenis_kelamin, tanggal_lahir FROM balita WHERE id_akun = ? ORDER BY nama_balita ASC");
-$stmt->bind_param("i", $id_akun);
-$stmt->execute();
+// Get balita list: for tenaga_kesehatan/admin show all, otherwise show only user's balita
+if ($role === 'tenaga_kesehatan' || $role === 'admin') {
+    $stmt = $conn->prepare("SELECT id_balita, nama_balita, jenis_kelamin, tanggal_lahir FROM balita ORDER BY nama_balita ASC");
+    $stmt->execute();
+} else {
+    $stmt = $conn->prepare("SELECT id_balita, nama_balita, jenis_kelamin, tanggal_lahir FROM balita WHERE id_akun = ? ORDER BY nama_balita ASC");
+    $stmt->bind_param("i", $id_akun);
+    $stmt->execute();
+}
 $result = $stmt->get_result();
 $balita_list = $result->fetch_all(MYSQLI_ASSOC);
 
-// Get selected balita or use first one
-$selected_balita_id = isset($_GET['id_balita']) ? $_GET['id_balita'] : ($balita_list[0]['id_balita'] ?? null);
+// Get selected balita or use first one (for nakes/admin allow 'all' -> null)
+$raw_selected = $_GET['id_balita'] ?? null;
+if ($raw_selected === null) {
+    if ($role === 'tenaga_kesehatan' || $role === 'admin') {
+        $selected_balita_id = null; // show all by default for nakes (choose via filter)
+    } else {
+        $selected_balita_id = $balita_list[0]['id_balita'] ?? null;
+    }
+} else {
+    if ($raw_selected === 'all') {
+        $selected_balita_id = null;
+    } else {
+        $selected_balita_id = (int)$raw_selected;
+    }
+}
 
-// Get selected balita details
-$stmt = $conn->prepare("SELECT * FROM balita WHERE id_balita = ? AND id_akun = ?");
-$stmt->bind_param("ii", $selected_balita_id, $id_akun);
-$stmt->execute();
-$result = $stmt->get_result();
-$balita = $result->fetch_assoc();
+// Get selected balita details (only when specific id selected)
+$balita = null;
+if ($selected_balita_id !== null) {
+    if ($role === 'tenaga_kesehatan' || $role === 'admin') {
+        $stmt = $conn->prepare("SELECT * FROM balita WHERE id_balita = ?");
+        $stmt->bind_param("i", $selected_balita_id);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $balita = $result->fetch_assoc();
+    } else {
+        $stmt = $conn->prepare("SELECT * FROM balita WHERE id_balita = ? AND id_akun = ?");
+        $stmt->bind_param("ii", $selected_balita_id, $id_akun);
+        $stmt->execute();
+        $result = $stmt->get_result();
+        $balita = $result->fetch_assoc();
+    }
+}
 
-if (!$balita) {
-    // Redirect jika belum ada data balita
+if (!$balita && ($role !== 'tenaga_kesehatan' && $role !== 'admin')) {
+    // Redirect jika pengguna biasa belum punya balita
     echo '<!DOCTYPE html>
     <html>
     <head>
@@ -75,63 +107,105 @@ if (!$balita) {
     exit;
 }
 
-// Ambil data pertumbuhan terakhir
-$stmt = $conn->prepare("
-    SELECT p.*, 
-           p.berat_badan - LAG(p.berat_badan) OVER (ORDER BY tanggal_pemeriksaan) as berat_badan_change,
-           p.tinggi_badan - LAG(p.tinggi_badan) OVER (ORDER BY tanggal_pemeriksaan) as tinggi_badan_change
-    FROM pertumbuhan p
-    WHERE id_balita = ? AND id_akun = ?
-    ORDER BY tanggal_pemeriksaan DESC 
-    LIMIT 1
-");
-$stmt->bind_param("ii", $balita['id_balita'], $id_akun);
-$stmt->execute();
-$result = $stmt->get_result();
-$pertumbuhan = $result->fetch_assoc();
+// Ambil data pertumbuhan terakhir dan asupan — hanya jika balita spesifik dipilih
+if ($selected_balita_id !== null) {
+    // determine owner filter: for pengguna require id_akun match, for nakes/admin skip owner filter
+    $balita_id_for_query = $selected_balita_id;
+    $require_owner = !($role === 'tenaga_kesehatan' || $role === 'admin');
 
-// Jika belum ada data pertumbuhan, set default
-if (!$pertumbuhan) {
+    if ($require_owner) {
+        $stmt = $conn->prepare("
+            SELECT p.*, 
+                   p.berat_badan - LAG(p.berat_badan) OVER (ORDER BY tanggal_pemeriksaan) as berat_badan_change,
+                   p.tinggi_badan - LAG(p.tinggi_badan) OVER (ORDER BY tanggal_pemeriksaan) as tinggi_badan_change
+            FROM pertumbuhan p
+            WHERE id_balita = ? AND id_akun = ?
+            ORDER BY tanggal_pemeriksaan DESC 
+            LIMIT 1
+        ");
+        $stmt->bind_param("ii", $balita_id_for_query, $id_akun);
+    } else {
+        $stmt = $conn->prepare("
+            SELECT p.*, 
+                   p.berat_badan - LAG(p.berat_badan) OVER (ORDER BY tanggal_pemeriksaan) as berat_badan_change,
+                   p.tinggi_badan - LAG(p.tinggi_badan) OVER (ORDER BY tanggal_pemeriksaan) as tinggi_badan_change
+            FROM pertumbuhan p
+            WHERE id_balita = ?
+            ORDER BY tanggal_pemeriksaan DESC 
+            LIMIT 1
+        ");
+        $stmt->bind_param("i", $balita_id_for_query);
+    }
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $pertumbuhan = $result ? $result->fetch_assoc() : null;
+
+    // Jika belum ada data pertumbuhan, set default
+    if (!$pertumbuhan) {
+        $pertumbuhan = [
+            'berat_badan' => 0,
+            'tinggi_badan' => 0,
+            'lingkar_kepala' => 0,
+            'zscore' => 0,
+            'status_gizi' => 'Belum Ada Data',
+            'tanggal_pemeriksaan' => date('Y-m-d'),
+            'berat_badan_change' => 0,
+            'tinggi_badan_change' => 0
+        ];
+    }
+
+    // Hitung Z-Score (simplified - dalam praktik perlu tabel WHO standar)
+    $zscore = $pertumbuhan ? $pertumbuhan['zscore'] : 0;
+    $status_gizi = $pertumbuhan ? $pertumbuhan['status_gizi'] : 'Normal';
+
+    // Ambil data asupan harian (rata-rata 7 hari terakhir)
+    $stmt = $conn->prepare("
+        SELECT 
+            COALESCE(AVG(kalori_total), 0) as avg_kalori,
+            COALESCE(AVG(protein), 0) as avg_protein,
+            COALESCE(AVG(karbohidrat), 0) as avg_karbohidrat,
+            COALESCE(AVG(lemak), 0) as avg_lemak
+        FROM asupan_harian 
+        WHERE id_balita = ? 
+        AND tanggal_catatan >= DATE_SUB(NOW(), INTERVAL 7 DAY)
+    ");
+    $stmt->bind_param("i", $balita_id_for_query);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $asupan = $result ? $result->fetch_assoc() : null;
+
+    // If no data, set defaults
+    if (!$asupan) {
+        $asupan = [
+            'avg_kalori' => 0,
+            'avg_protein' => 0,
+            'avg_karbohidrat' => 0,
+            'avg_lemak' => 0
+        ];
+    }
+
+} else {
+    // 'All' selected — do not run per-balita queries. Provide safe defaults and empty recommendation list.
     $pertumbuhan = [
         'berat_badan' => 0,
         'tinggi_badan' => 0,
         'lingkar_kepala' => 0,
         'zscore' => 0,
-        'status_gizi' => 'Belum Ada Data',
+        'status_gizi' => 'Gabungan Data',
         'tanggal_pemeriksaan' => date('Y-m-d'),
         'berat_badan_change' => 0,
         'tinggi_badan_change' => 0
     ];
-}
-
-// Hitung Z-Score (simplified - dalam praktik perlu tabel WHO standar)
-$zscore = $pertumbuhan ? $pertumbuhan['zscore'] : 0;
-$status_gizi = $pertumbuhan ? $pertumbuhan['status_gizi'] : 'Normal';
-
-// Ambil data asupan harian (rata-rata 7 hari terakhir)
-$stmt = $conn->prepare("
-    SELECT 
-        COALESCE(AVG(kalori_total), 0) as avg_kalori,
-        COALESCE(AVG(protein), 0) as avg_protein,
-        COALESCE(AVG(karbohidrat), 0) as avg_karbohidrat,
-        COALESCE(AVG(lemak), 0) as avg_lemak
-    FROM asupan_harian 
-    WHERE id_balita = ? 
-    AND tanggal_catatan >= DATE_SUB(NOW(), INTERVAL 7 DAY)
-");
-$stmt->bind_param("i", $balita['id_balita']);
-$stmt->execute();
-$result = $stmt->get_result();
-$asupan = $result->fetch_assoc();
-
-// If no data, set defaults
-if (!$asupan) {
+    $zscore = 0;
+    $status_gizi = 'Gabungan Data';
     $asupan = [
         'avg_kalori' => 0,
         'avg_protein' => 0,
         'avg_karbohidrat' => 0,
         'avg_lemak' => 0
     ];
+    $rekomendasi_list = [];
+    $usia_bulan = 0;
 }
 
 // Target nutrisi berdasarkan usia (simplified)
@@ -146,29 +220,27 @@ $persen_protein = $asupan['avg_protein'] > 0 ? round(($asupan['avg_protein'] / $
 $persen_karbohidrat = $asupan['avg_karbohidrat'] > 0 ? round(($asupan['avg_karbohidrat'] / $target_karbohidrat) * 100) : 0;
 $persen_lemak = $asupan['avg_lemak'] > 0 ? round(($asupan['avg_lemak'] / $target_lemak) * 100) : 0;
 
-// Ambil rekomendasi dari tenaga kesehatan
-$stmt = $conn->prepare("
-    SELECT r.*, a.nama as nama_tenaga_kesehatan, t.id_tenaga_kesehatan
-    FROM rekomendasi_gizi r
-    JOIN akun a ON r.id_akun = a.id_akun
-    JOIN tenaga_kesehatan t ON t.id_akun = a.id_akun
-    WHERE r.id_balita = ? AND r.status = 'aktif'
-    ORDER BY r.prioritas DESC, r.tanggal_rekomendasi DESC
-    LIMIT 3
-");
-$stmt->bind_param("i", $balita['id_balita']);
-$stmt->execute();
-$result = $stmt->get_result();
-$rekomendasi_list = [];
-while ($row = $result->fetch_assoc()) {
-    $rekomendasi_list[] = $row;
-}
+// Ambil rekomendasi dari tenaga kesehatan dan hitung usia hanya jika balita spesifik dipilih
+if ($selected_balita_id !== null && isset($balita['id_balita'])) {
+    $stmt = $conn->prepare("\n        SELECT r.*, a.nama as nama_tenaga_kesehatan, t.id_tenaga_kesehatan\n        FROM rekomendasi_gizi r\n        JOIN akun a ON r.id_akun = a.id_akun\n        JOIN tenaga_kesehatan t ON t.id_akun = a.id_akun\n        WHERE r.id_balita = ? AND r.status = 'aktif'\n        ORDER BY r.prioritas DESC, r.tanggal_rekomendasi DESC\n        LIMIT 3\n    ");
+    $stmt->bind_param("i", $balita['id_balita']);
+    $stmt->execute();
+    $result = $stmt->get_result();
+    $rekomendasi_list = [];
+    while ($row = $result->fetch_assoc()) {
+        $rekomendasi_list[] = $row;
+    }
 
-// Hitung usia dalam bulan
-$tanggal_lahir = new DateTime($balita['tanggal_lahir']);
-$sekarang = new DateTime();
-$diff = $tanggal_lahir->diff($sekarang);
-$usia_bulan = ($diff->y * 12) + $diff->m;
+    // Hitung usia dalam bulan
+    $tanggal_lahir = new DateTime($balita['tanggal_lahir']);
+    $sekarang = new DateTime();
+    $diff = $tanggal_lahir->diff($sekarang);
+    $usia_bulan = ($diff->y * 12) + $diff->m;
+} else {
+    // Tidak ada balita spesifik — set nilai default
+    $rekomendasi_list = [];
+    $usia_bulan = 0;
+}
 ?>
 
 <!DOCTYPE html>
@@ -313,13 +385,56 @@ $usia_bulan = ($diff->y * 12) + $diff->m;
         
         /* Status Card */
         .status-card {
-            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
             padding: 25px;
             border-radius: 15px;
             margin-bottom: 30px;
             display: flex;
             align-items: center;
             gap: 20px;
+        }
+
+        /* Good status - Normal */
+        .status-card.status-good {
+            background: linear-gradient(135deg, #e8f5e9 0%, #c8e6c9 100%);
+        }
+        .status-card.status-good .status-title { color: #2e7d32; }
+        .status-card.status-good .status-detail { color: #558b2f; }
+        .status-card.status-good .status-badge.badge-good {
+            background: white;
+            color: #2e7d32;
+        }
+
+        /* Warning status - Gizi Kurang, Stunting, Wasting */
+        .status-card.status-warning {
+            background: linear-gradient(135deg, #fff3e0 0%, #ffe0b2 100%);
+        }
+        .status-card.status-warning .status-title { color: #e65100; }
+        .status-card.status-warning .status-detail { color: #ef6c00; }
+        .status-card.status-warning .status-badge.badge-warning {
+            background: white;
+            color: #e65100;
+        }
+
+        /* Danger status - Gizi Buruk, Stunting Berat, Wasting Berat */
+        .status-card.status-danger {
+            background: linear-gradient(135deg, #ffebee 0%, #ffcdd2 100%);
+        }
+        .status-card.status-danger .status-title { color: #c62828; }
+        .status-card.status-danger .status-detail { color: #d32f2f; }
+        .status-card.status-danger .status-badge.badge-danger {
+            background: white;
+            color: #c62828;
+        }
+
+        /* Alert status - Gemuk, Obesitas, Berisiko */
+        .status-card.status-alert {
+            background: linear-gradient(135deg, #e3f2fd 0%, #bbdefb 100%);
+        }
+        .status-card.status-alert .status-title { color: #1565c0; }
+        .status-card.status-alert .status-detail { color: #1976d2; }
+        .status-card.status-alert .status-badge.badge-alert {
+            background: white;
+            color: #1565c0;
         }
         
         .status-icon {
@@ -340,20 +455,16 @@ $usia_bulan = ($diff->y * 12) + $diff->m;
         .status-title {
             font-size: 24px;
             font-weight: 700;
-            color: #2e7d32;
             margin-bottom: 5px;
         }
         
         .status-detail {
-            color: #558b2f;
             font-size: 14px;
         }
         
         .status-badge {
-            background: white;
             padding: 8px 20px;
             border-radius: 20px;
-            color: #2e7d32;
             font-weight: 600;
             display: flex;
             align-items: center;
@@ -571,9 +682,12 @@ $usia_bulan = ($diff->y * 12) + $diff->m;
                 <form action="" method="GET" style="display: flex; gap: 10px; align-items: center;">
                     <label for="id_balita" style="font-weight: 600;">Pilih Balita:</label>
                     <select name="id_balita" id="id_balita" class="form-select" style="flex: 1; max-width: 300px; padding: 10px; border-radius: 8px; border: 1px solid #e0e0e0;" onchange="this.form.submit()">
+                        <?php if ($role === 'tenaga_kesehatan' || $role === 'admin'): ?>
+                            <option value="all" <?php echo ($selected_balita_id === null) ? 'selected' : ''; ?>>Semua Balita</option>
+                        <?php endif; ?>
                         <?php foreach ($balita_list as $b): ?>
                             <option value="<?php echo $b['id_balita']; ?>" <?php echo ($b['id_balita'] == $selected_balita_id) ? 'selected' : ''; ?>>
-                                <?php echo htmlspecialchars($b['nama_balita'] . ' (' . $b['jenis_kelamin'] . ')'); ?>
+                                <?php echo htmlspecialchars($b['nama_balita'] . ' (' . ($b['jenis_kelamin'] ?? '') . ')'); ?>
                             </option>
                         <?php endforeach; ?>
                     </select>
@@ -586,22 +700,66 @@ $usia_bulan = ($diff->y * 12) + $diff->m;
                 <h1>Laporan Kesehatan Balita</h1>
                 <p class="page-subtitle">Ringkasan lengkap perkembangan dan status kesehatan</p>
             </div>
+            <?php if ($selected_balita_id !== null && isset($balita['id_balita'])): ?>
             <a href="export_pdf.php?id=<?php echo $balita['id_balita']; ?>" class="btn-download" target="_blank">
                 <span>📄</span>
                 <span>Unduh Laporan PDF</span>
             </a>
+            <?php else: ?>
+            <button class="btn-download" disabled style="opacity:0.6; cursor:not-allowed;">📄 Unduh Laporan PDF</button>
+            <?php endif; ?>
         </div>
         
         <!-- Status Gizi Card -->
-        <div class="status-card">
+        <div class="status-card <?php 
+            if (strpos($status_gizi, 'Buruk') !== false || strpos($status_gizi, 'Stunting Berat') !== false || strpos($status_gizi, 'Wasting Berat') !== false) {
+                echo 'status-danger';
+            } elseif (strpos($status_gizi, 'Kurang') !== false || strpos($status_gizi, 'Stunting') !== false || strpos($status_gizi, 'Wasting') !== false) {
+                echo 'status-warning';
+            } elseif (strpos($status_gizi, 'Gemuk') !== false || strpos($status_gizi, 'Obesitas') !== false || strpos($status_gizi, 'Berisiko') !== false) {
+                echo 'status-alert';
+            } else {
+                echo 'status-good';
+            }
+        ?>">
             <div class="status-icon">📊</div>
             <div class="status-content">
                 <div class="status-title">Status Gizi: <?php echo $status_gizi; ?></div>
                 <div class="status-detail">Z-Score: <?php echo number_format($zscore, 1); ?> (Berat Badan menurut Tinggi Badan)</div>
             </div>
-            <div class="status-badge">
-                <span>✓</span>
-                <span>Baik</span>
+            <div class="status-badge <?php 
+                if (strpos($status_gizi, 'Buruk') !== false || strpos($status_gizi, 'Stunting Berat') !== false || strpos($status_gizi, 'Wasting Berat') !== false) {
+                    echo 'badge-danger';
+                } elseif (strpos($status_gizi, 'Kurang') !== false || strpos($status_gizi, 'Stunting') !== false || strpos($status_gizi, 'Wasting') !== false) {
+                    echo 'badge-warning';
+                } elseif (strpos($status_gizi, 'Gemuk') !== false || strpos($status_gizi, 'Obesitas') !== false || strpos($status_gizi, 'Berisiko') !== false) {
+                    echo 'badge-alert';
+                } else {
+                    echo 'badge-good';
+                }
+            ?>">
+                <span><?php
+                    if (strpos($status_gizi, 'Buruk') !== false || strpos($status_gizi, 'Stunting Berat') !== false || strpos($status_gizi, 'Wasting Berat') !== false) {
+                        echo '⚠️';
+                    } elseif (strpos($status_gizi, 'Kurang') !== false || strpos($status_gizi, 'Stunting') !== false || strpos($status_gizi, 'Wasting') !== false) {
+                        echo '⚠️';
+                    } elseif (strpos($status_gizi, 'Gemuk') !== false || strpos($status_gizi, 'Obesitas') !== false || strpos($status_gizi, 'Berisiko') !== false) {
+                        echo '⚠️';
+                    } else {
+                        echo '✓';
+                    }
+                ?></span>
+                <span><?php 
+                    if (strpos($status_gizi, 'Buruk') !== false || strpos($status_gizi, 'Stunting Berat') !== false || strpos($status_gizi, 'Wasting Berat') !== false) {
+                        echo 'Perlu Perhatian Segera';
+                    } elseif (strpos($status_gizi, 'Kurang') !== false || strpos($status_gizi, 'Stunting') !== false || strpos($status_gizi, 'Wasting') !== false) {
+                        echo 'Perlu Perhatian';
+                    } elseif (strpos($status_gizi, 'Gemuk') !== false || strpos($status_gizi, 'Obesitas') !== false || strpos($status_gizi, 'Berisiko') !== false) {
+                        echo 'Perlu Perhatian';
+                    } else {
+                        echo 'Baik';
+                    }
+                ?></span>
             </div>
         </div>
         
@@ -609,26 +767,26 @@ $usia_bulan = ($diff->y * 12) + $diff->m;
         <div class="info-grid">
             <div class="info-card">
                 <div class="info-label">Berat Badan Saat Ini</div>
-                <div class="info-value blue"><?php echo number_format($pertumbuhan['berat_badan'], 1); ?> kg</div>
+                <div class="info-value blue"><?php echo number_format($pertumbuhan['berat_badan'] ?? 0, 1); ?> kg</div>
                 <div class="info-change">📈 +0.3 kg bulan ini</div>
             </div>
             
             <div class="info-card">
                 <div class="info-label">Tinggi Badan Saat Ini</div>
-                <div class="info-value green"><?php echo $pertumbuhan['tinggi_badan']; ?> cm</div>
+                <div class="info-value green"><?php echo $pertumbuhan['tinggi_badan'] ?? 0; ?> cm</div>
                 <div class="info-change">📈 +1 cm bulan ini</div>
             </div>
             
             <div class="info-card">
                 <div class="info-label">Usia</div>
-                <div class="info-value purple"><?php echo $usia_bulan; ?></div>
-                <div class="info-extra">bulan (<?php echo floor($usia_bulan / 12); ?> tahun)</div>
+                <div class="info-value purple"><?php echo $usia_bulan ?? 0; ?></div>
+                <div class="info-extra">bulan (<?php echo isset($usia_bulan) ? floor($usia_bulan / 12) : 0; ?> tahun)</div>
             </div>
             
             <div class="info-card">
                 <div class="info-label">Jenis Kelamin</div>
-                <div class="info-value pink"><?php echo $balita['jenis_kelamin'] == 'L' ? 'L' : 'P'; ?></div>
-                <div class="info-extra"><?php echo $balita['jenis_kelamin'] == 'L' ? 'Laki-laki' : 'Perempuan'; ?></div>
+                <div class="info-value pink"><?php echo isset($balita['jenis_kelamin']) && $balita['jenis_kelamin'] == 'L' ? 'L' : (isset($balita['jenis_kelamin']) ? 'P' : '-'); ?></div>
+                <div class="info-extra"><?php echo isset($balita['jenis_kelamin']) && $balita['jenis_kelamin'] == 'L' ? 'Laki-laki' : (isset($balita['jenis_kelamin']) ? 'Perempuan' : 'Belum dipilih'); ?></div>
             </div>
         </div>
         

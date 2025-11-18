@@ -14,16 +14,18 @@ $conn = getConnection();
 // Variabel untuk pesan
 $error = '';
 $success = '';
-$selected_role = isset($_GET['role']) ? $_GET['role'] : null;
+// Determine selected role from POST (when validation fails) or GET param
+$selected_role = isset($_POST['role']) ? $_POST['role'] : (isset($_GET['role']) ? $_GET['role'] : null);
 
 // Proses registrasi
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
-    $nama_lengkap = trim($_POST['nama_lengkap']);
-    $email = trim($_POST['email']);
-    $password = $_POST['password'];
-    $nomor_sertifikasi = trim($_POST['nomor_sertifikasi']);
-    $posted_role = isset($_POST['selected_role']) ? $_POST['selected_role'] : $selected_role;
-    
+    $nama_lengkap = trim($_POST['nama_lengkap'] ?? '');
+    $email = trim($_POST['email'] ?? '');
+    $password = $_POST['password'] ?? '';
+    $nomor_sertifikasi = trim($_POST['nomor_sertifikasi'] ?? '');
+    $alamat = trim($_POST['alamat'] ?? '');
+    $posted_role = isset($_POST['role']) ? $_POST['role'] : $selected_role;
+
     $admin_code = isset($_POST['admin_code']) ? trim($_POST['admin_code']) : '';
     $valid_admin_code = 'NUTRIGROW2025'; // In production, this should be stored securely
 
@@ -45,65 +47,55 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             // Cek apakah email sudah terdaftar di tabel AKUN
             $stmt = $conn->prepare("SELECT id_akun FROM akun WHERE email = ?");
             $stmt->execute([$email]);
-            
+
             if ($stmt->rowCount() > 0) {
                 $error = 'Email sudah terdaftar!';
             } else {
                 // Hash password
                 $hashed_password = password_hash($password, PASSWORD_DEFAULT);
-                
+
                 // Generate username dari email
                 $username = explode('@', $email)[0];
-                
+
                 // Cek username conflict
                 $stmt = $conn->prepare("SELECT id_akun FROM akun WHERE username = ?");
                 $stmt->execute([$username]);
                 if ($stmt->rowCount() > 0) {
                     $username = $username . rand(100, 999);
                 }
-                
+
                 // Begin transaction untuk keamanan data
                 $conn->beginTransaction();
-                
+
                 // Insert ke tabel AKUN
-                $stmt = $conn->prepare("
-                    INSERT INTO akun (nama, email, password, username, status_akun, tanggal_aktif) 
-                    VALUES (?, ?, ?, ?, 'aktif', NOW())
-                ");
+                $stmt = $conn->prepare(
+                    "INSERT INTO akun (nama, email, password, username, status_akun, tanggal_aktif) VALUES (?, ?, ?, ?, 'aktif', NOW())"
+                );
                 $stmt->execute([$nama_lengkap, $email, $hashed_password, $username]);
-                
+
                 // Dapatkan ID akun yang baru dibuat
                 $id_akun = $conn->lastInsertId();
-                
+
                 // Tentukan role berdasarkan pilihan
                 if ($posted_role === 'admin') {
                     // Insert sebagai ADMIN
-                    $stmt = $conn->prepare("
-                        INSERT INTO admin (id_akun, level_admin) 
-                        VALUES (?, 'admin')
-                    ");
+                    $stmt = $conn->prepare("INSERT INTO admin (id_akun, level_admin) VALUES (?, 'admin')");
                     $stmt->execute([$id_akun]);
                 } elseif ($posted_role === 'tenaga_kesehatan') {
                     // Insert sebagai TENAGA KESEHATAN
-                    $stmt = $conn->prepare("
-                        INSERT INTO tenaga_kesehatan (id_akun, sertifikasi) 
-                        VALUES (?, ?)
-                    ");
+                    $stmt = $conn->prepare("INSERT INTO tenaga_kesehatan (id_akun, sertifikasi) VALUES (?, ?)");
                     $stmt->execute([$id_akun, $nomor_sertifikasi]);
                 } else {
-                    // Insert sebagai PENGGUNA (orang tua)
-                    $stmt = $conn->prepare("
-                        INSERT INTO pengguna (id_akun, alamat) 
-                        VALUES (?, NULL)
-                    ");
-                    $stmt->execute([$id_akun]);
+                    // Insert sebagai PENGGUNA (orang tua) - simpan alamat jika ada
+                    $stmt = $conn->prepare("INSERT INTO pengguna (id_akun, alamat) VALUES (?, ?)");
+                    $stmt->execute([$id_akun, $alamat ?: null]);
                 }
-                
+
                 // Commit transaction - semua berhasil!
                 $conn->commit();
-                
+
                 $success = 'Registrasi berhasil! Silakan login.';
-                
+
                 // Redirect ke halaman login setelah 2 detik, sertakan role jika ada
                 $roleParam = $selected_role ? '?role=' . urlencode($selected_role) : '';
                 header("refresh:2;url=login.php" . $roleParam);
@@ -119,8 +111,8 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         }
     }
 }
-?>
 
+?>
 <!DOCTYPE html>
 <html lang="id">
 <head>
@@ -375,12 +367,12 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             </div>
             
             <div id="sertifikasi-container" class="form-group" style="display: <?php echo $selected_role === 'tenaga_kesehatan' ? 'block' : 'none'; ?>">
-                <label for="sertifikasi">
+                <label for="nomor_sertifikasi">
                     Nomor Sertifikasi <span class="required-mark" style="color:#dc2626">*</span>
                 </label>
                 <div class="input-wrapper">
                     <span class="input-icon">🏥</span>
-                    <input type="text" id="sertifikasi" name="sertifikasi" 
+                    <input type="text" id="nomor_sertifikasi" name="nomor_sertifikasi" 
                            placeholder="Masukkan nomor sertifikasi"
                            value="<?php echo isset($_POST['nomor_sertifikasi']) ? htmlspecialchars($_POST['nomor_sertifikasi']) : ''; ?>"
                            <?php echo $selected_role === 'tenaga_kesehatan' ? 'required' : ''; ?>>
@@ -401,6 +393,18 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 <p class="help-text">Wajib diisi untuk administrator - hubungi super admin untuk mendapatkan kode</p>
             </div>
             
+            <div id="alamat-container" class="form-group" style="display: <?php echo $selected_role === 'pengguna' ? 'block' : 'none'; ?>">
+                <label for="alamat">Alamat</label>
+                <div class="input-wrapper">
+                    <span class="input-icon">🏠</span>
+                    <input type="text" id="alamat" name="alamat"
+                           placeholder="Masukkan alamat lengkap"
+                           value="<?php echo isset($_POST['alamat']) ? htmlspecialchars($_POST['alamat']) : ''; ?>"
+                           <?php echo $selected_role === 'pengguna' ? 'required' : ''; ?>>
+                </div>
+                <p class="help-text">Alamat akan disimpan pada profil orang tua</p>
+            </div>
+
             <button type="submit" class="btn-submit">Daftar</button>
         </form>
         
@@ -408,5 +412,32 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
             Sudah punya akun? <a href="login.php">Masuk di sini</a>
         </div>
     </div>
+    <script>
+        (function(){
+            var roleSelect = document.getElementById('role');
+            var sertifikasi = document.getElementById('sertifikasi-container');
+            var adminCode = document.getElementById('admin-code-container');
+            var alamat = document.getElementById('alamat-container');
+
+            if (!roleSelect) return;
+
+            function updateVisibility() {
+                var role = roleSelect.value;
+                if (sertifikasi) sertifikasi.style.display = role === 'tenaga_kesehatan' ? 'block' : 'none';
+                if (adminCode) adminCode.style.display = role === 'admin' ? 'block' : 'none';
+                if (alamat) alamat.style.display = role === 'pengguna' ? 'block' : 'none';
+
+                var ns = document.getElementById('nomor_sertifikasi');
+                if (ns) ns.required = role === 'tenaga_kesehatan';
+                var ac = document.getElementById('admin_code');
+                if (ac) ac.required = role === 'admin';
+                var al = document.getElementById('alamat');
+                if (al) al.required = role === 'pengguna';
+            }
+
+            roleSelect.addEventListener('change', updateVisibility);
+            updateVisibility();
+        })();
+    </script>
 </body>
 </html>

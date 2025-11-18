@@ -12,9 +12,15 @@ $conn = getConnection();
 
 $id_balita = isset($_GET['id']) ? (int)$_GET['id'] : 0;
 
-// Ambil data balita - pastikan milik user yang login
-$stmt = $conn->prepare("SELECT * FROM balita WHERE id_balita = ? AND id_akun = ?");
-$stmt->execute([$id_balita, $_SESSION['id_akun']]);
+// Ambil data balita - jika tenaga_kesehatan/admin boleh mengakses semua, jika pengguna hanya milik mereka
+$role = $_SESSION['role'] ?? 'pengguna';
+if ($role === 'tenaga_kesehatan' || $role === 'admin') {
+    $stmt = $conn->prepare("SELECT * FROM balita WHERE id_balita = ?");
+    $stmt->execute([$id_balita]);
+} else {
+    $stmt = $conn->prepare("SELECT * FROM balita WHERE id_balita = ? AND id_akun = ?");
+    $stmt->execute([$id_balita, $_SESSION['id_akun']]);
+}
 $balita = $stmt->fetch();
 
 if (!$balita) {

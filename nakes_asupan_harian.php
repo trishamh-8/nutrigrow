@@ -90,6 +90,9 @@ $persen_protein = $target_protein > 0 ? ($total_protein / $target_protein) * 100
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        /* Ensure main content doesn't overlap the fixed sidebar */
+        .main-content { margin-left: 240px; }
+        @media (max-width: 768px) { .main-content { margin-left: 70px; } }
         .filter-section {
             background: white;
             padding: 20px;
@@ -305,6 +308,13 @@ $persen_protein = $target_protein > 0 ? ($total_protein / $target_protein) * 100
                         </div>
                     </div>
                 </div>
+            </div>
+            <div style="margin-top:10px; margin-bottom:20px;">
+                <?php if (!empty($balita_info['id_akun'])): ?>
+                <a class="btn btn-secondary" href="akun_detail.php?id=<?php echo $balita_info['id_akun']; ?>">
+                    <i class="fas fa-user"></i> Lihat Akun Orang Tua
+                </a>
+                <?php endif; ?>
             </div>
 
             <!-- Statistics Cards -->

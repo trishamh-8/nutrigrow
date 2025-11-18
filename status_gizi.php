@@ -19,8 +19,32 @@ if (!$user) {
 
 $message = '';
 $error = '';
-$mode = 'input'; // Mode: input, result
+$mode = 'input'; // Mode: input, result, add_balita
 $zscore_result = null;
+
+// Process add balita form if submitted
+if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['action'] == 'add_balita') {
+    $nama_balita = trim($_POST['nama_balita']);
+    $tanggal_lahir = $_POST['tanggal_lahir'];
+    $jenis_kelamin = $_POST['jenis_kelamin'];
+    $alamat_balita = trim($_POST['alamat_balita']);
+
+    // Validate input
+    if (empty($nama_balita) || empty($tanggal_lahir) || empty($jenis_kelamin)) {
+        $error = "Semua field bertanda * wajib diisi!";
+    } else {
+        try {
+            $stmt = $conn->prepare("INSERT INTO balita (id_akun, nama_balita, tanggal_lahir, jenis_kelamin, alamat_balita) VALUES (?, ?, ?, ?, ?)");
+            $stmt->execute([$id_akun, $nama_balita, $tanggal_lahir, $jenis_kelamin, $alamat_balita]);
+            $newId = $conn->lastInsertId();
+            // Redirect immediately to the status_gizi page for the newly created balita
+            header("Location: status_gizi.php?id_balita=" . intval($newId));
+            exit;
+        } catch (PDOException $e) {
+            $error = "Gagal menambahkan data: " . $e->getMessage();
+        }
+    }
+}
 
 // Get all balita for this user
 $query_balita = "SELECT id_balita, nama_balita, tanggal_lahir, jenis_kelamin FROM balita WHERE id_akun = ? ORDER BY nama_balita ASC";
@@ -29,12 +53,24 @@ $stmt->execute([$id_akun]);
 $balita_list = $stmt->fetchAll();
 
 // Get selected balita or use first one
-$selected_balita_id = isset($_GET['id_balita']) ? $_GET['id_balita'] : ($balita_list[0]['id_balita'] ?? null);
+$selected_balita_id = isset($_GET['id_balita']) ? intval($_GET['id_balita']) : ($balita_list[0]['id_balita'] ?? null);
 
 // Get selected balita details
-$stmt = $conn->prepare("SELECT * FROM balita WHERE id_balita = ? AND id_akun = ?");
-$stmt->execute([$selected_balita_id, $id_akun]);
-$balita = $stmt->fetch();
+if ($selected_balita_id) {
+    if (isset($_SESSION['role']) && in_array($_SESSION['role'], ['tenaga_kesehatan', 'admin'])) {
+        // health workers and admin may view any balita by id
+        $stmt = $conn->prepare("SELECT * FROM balita WHERE id_balita = ? LIMIT 1");
+        $stmt->execute([$selected_balita_id]);
+        $balita = $stmt->fetch();
+    } else {
+        // regular pengguna can only access their own balita
+        $stmt = $conn->prepare("SELECT * FROM balita WHERE id_balita = ? AND id_akun = ? LIMIT 1");
+        $stmt->execute([$selected_balita_id, $id_akun]);
+        $balita = $stmt->fetch();
+    }
+} else {
+    $balita = null;
+}
 
 // Fungsi untuk menghitung Z-Score
 function hitungZScore($nilai_aktual, $median, $sd) {
@@ -165,9 +201,11 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST' && isset($_POST['action']) && $_POST['a
                 try {
                     $stmt = $conn->prepare($query_insert);
                     $zscore_avg = ($zscore_bbu + $zscore_tbu + $zscore_bbtb) / 3;
+                    // store pertumbuhan under the parent account owning the balita
+                    $owner_id = $balita['id_akun'] ?? $id_akun;
                     $stmt->execute([
                         $selected_balita_id,
-                        $id_akun,
+                        $owner_id,
                         $tanggal_pemeriksaan,
                         $berat_badan,
                         $tinggi_badan,
@@ -326,7 +364,7 @@ if ($selected_balita_id) {
 
         /* Main content spacing so it doesn't overlap with fixed sidebar */
         .main-content {
-            margin-left: 280px; 
+            margin-left: 240px; 
             padding: 30px;
             box-sizing: border-box;
             min-height: 100vh;
@@ -607,6 +645,50 @@ if ($selected_balita_id) {
             color: white;
             opacity: 0.8;
         }
+        /* Modal for adding balita */
+        .modal-overlay {
+            position: fixed;
+            inset: 0;
+            background: rgba(0,0,0,0.5);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+        }
+
+        .modal-overlay.active {
+            display: flex;
+        }
+
+        .modal-content {
+            background: #fff;
+            width: 640px;
+            max-width: calc(100% - 32px);
+            border-radius: 12px;
+            box-shadow: 0 10px 40px rgba(2,6,23,0.2);
+            padding: 20px;
+            animation: slideUp .18s ease-out;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 12px;
+        }
+
+        .modal-close {
+            background: transparent;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            color: #6b7280;
+        }
+
+        @keyframes slideUp {
+            from { transform: translateY(8px); opacity: 0; }
+            to   { transform: translateY(0); opacity: 1; }
+        }
         
         .history-table {
             margin-top: 30px;
@@ -652,6 +734,7 @@ if ($selected_balita_id) {
             </div>
 
             <!-- Balita Selector -->
+            <?php if (count($balita_list) > 0): ?>
             <div class="balita-selector" style="margin-bottom: 30px; margin-top: 15px;">
                 <form action="" method="GET" style="display: flex; gap: 10px; align-items: center;">
                     <label for="id_balita" style="font-weight: 600;">Pilih Balita:</label>
@@ -664,6 +747,7 @@ if ($selected_balita_id) {
                     </select>
                 </form>
             </div>
+            <?php endif; ?>
 
             <!-- Alert Messages -->
             <?php if ($message): ?>
@@ -682,6 +766,9 @@ if ($selected_balita_id) {
             <!-- Form Input -->
             <div class="two-column">
                 <div class="content-card">
+                    <?php if (count($balita_list) === 0): ?>
+                    <!-- If there are no balita at all we skip the left input card and let the later placeholder handle the CTA -->
+                    <?php else: ?>
                     <div style="background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%); padding: 20px; border-radius: 12px; color: white; margin-bottom: 20px;">
                         <div style="display: flex; align-items: center; gap: 15px;">
                             <div style="font-size: 32px;">📊</div>
@@ -691,14 +778,17 @@ if ($selected_balita_id) {
                             </div>
                         </div>
                     </div>
+                    <?php endif; ?>
 
                     <?php if (!$balita): ?>
-                    <div style="text-align: center; padding: 40px 20px; color: #64748b;">
-                        <i class="fas fa-baby" style="font-size: 48px; margin-bottom: 15px; opacity: 0.3;"></i>
-                        <p>Belum ada data balita. Silakan tambahkan data balita terlebih dahulu.</p>
-                        <button class="btn btn-primary" style="margin-top: 15px;" onclick="location.href='balita.php?action=add'">
-                            <i class="fas fa-plus"></i> Tambah Data Balita
-                        </button>
+                    <!-- No balita selected / available: show CTA button to the create page -->
+                    <div style="text-align: center; padding: 30px 20px;">
+                        <div style="font-size: 36px; margin-bottom: 12px;">👶</div>
+                        <h3 style="color: #1e293b; margin-bottom: 8px;">Belum ada balita terpilih</h3>
+                        <p style="color: #64748b; margin-bottom: 18px;">Silakan tambah data balita terlebih dahulu melalui halaman pendaftaran.</p>
+                        <a href="#" class="btn btn-primary" id="open-add-balita" style="display:inline-block; padding:10px 18px; border-radius:8px; text-decoration:none; color:#fff;">
+                            <i class="fas fa-plus-circle"></i> Tambah Data Balita
+                        </a>
                     </div>
                     <?php else: ?>
                     <form method="POST" action="">
@@ -1006,8 +1096,105 @@ if ($selected_balita_id) {
                 </table>
             </div>
             <?php endif; ?>
+            
+            <!-- Modal: Create Balita -->
+            <div class="modal-overlay" id="balitaModal" aria-hidden="true">
+                <div class="modal-content" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+                    <div class="modal-header">
+                        <h3 id="modalTitle" style="margin:0; font-size:18px;">Tambah Data Balita</h3>
+                        <button class="modal-close" id="closeBalitaModal" aria-label="Tutup">&times;</button>
+                    </div>
+
+                    <div>
+                        <form method="POST" action="" id="formAddBalita">
+                            <input type="hidden" name="action" value="add_balita">
+                            <div class="form-group">
+                                <label class="form-label">Nama Balita <span style="color: #dc2626;">*</span></label>
+                                <div class="input-icon">
+                                    <i class="fas fa-baby"></i>
+                                    <input type="text" name="nama_balita" class="form-input" placeholder="Masukkan nama balita" required>
+                                </div>
+                            </div>
+
+                            <div class="two-column">
+                                <div class="form-group">
+                                    <label class="form-label">Tanggal Lahir <span style="color: #dc2626;">*</span></label>
+                                    <div class="input-icon">
+                                        <i class="fas fa-calendar"></i>
+                                        <input type="date" name="tanggal_lahir" class="form-input" required 
+                                               max="<?php echo date('Y-m-d'); ?>">
+                                    </div>
+                                </div>
+
+                                <div class="form-group">
+                                    <label class="form-label">Jenis Kelamin <span style="color: #dc2626;">*</span></label>
+                                    <div class="input-icon">
+                                        <i class="fas fa-venus-mars"></i>
+                                        <select name="jenis_kelamin" class="form-input" required>
+                                            <option value="">Pilih jenis kelamin</option>
+                                            <option value="L">Laki-laki</option>
+                                            <option value="P">Perempuan</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="form-group">
+                                <label class="form-label">Alamat</label>
+                                <div class="input-icon">
+                                    <i class="fas fa-home"></i>
+                                    <textarea name="alamat_balita" class="form-input" rows="3" 
+                                              placeholder="Masukkan alamat (opsional)"></textarea>
+                                </div>
+                            </div>
+
+                            <div style="display:flex; gap:10px; justify-content:flex-end; margin-top:12px;">
+                                <button type="button" class="btn" id="cancelAddBalita">Batal</button>
+                                <button type="submit" class="btn btn-primary">Simpan</button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            </div>
+
         </main>
     </div>
+    <script>
+        // Modal handlers for adding balita
+        (function(){
+            const modal = document.getElementById('balitaModal');
+            const openBtns = [document.getElementById('open-add-balita'), document.getElementById('open-add-balita-top')];
+            const closeBtn = document.getElementById('closeBalitaModal');
+            const cancelBtn = document.getElementById('cancelAddBalita');
+
+            function openModal() {
+                modal.classList.add('active');
+                modal.setAttribute('aria-hidden', 'false');
+                // focus first input
+                const first = modal.querySelector('input[name="nama_balita"]');
+                if (first) first.focus();
+            }
+
+            function closeModal() {
+                modal.classList.remove('active');
+                modal.setAttribute('aria-hidden', 'true');
+            }
+
+            openBtns.forEach(btn => { if (btn) btn.addEventListener('click', function(e){ e.preventDefault(); openModal(); }); });
+            if (closeBtn) closeBtn.addEventListener('click', closeModal);
+            if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
+
+            // close when clicking outside modal-content
+            modal.addEventListener('click', function(e){
+                if (e.target === modal) closeModal();
+            });
+
+            // close on escape
+            document.addEventListener('keydown', function(e){
+                if (e.key === 'Escape' && modal.classList.contains('active')) closeModal();
+            });
+        })();
+    </script>
 </body>
 </html>
 

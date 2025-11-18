@@ -21,47 +21,72 @@ if (!$user) {
     exit;
 }
 
-// Ambil statistik (dummy data untuk demo - nanti bisa diganti dengan data real)
-$total_balita = 0;
-$status_gizi_baik = 0;
-$jadwal_mendatang = 0;
-$artikel_baru = 0;
-
 // Jika role = pengguna, hitung data real dari database
 if ($user['role'] == 'pengguna') {
-    // Hitung total balita
+    // Hitung total balita milik pengguna
     $stmt = $conn->prepare("SELECT COUNT(*) as total FROM balita WHERE id_akun = ?");
     $stmt->execute([$_SESSION['id_akun']]);
     $result = $stmt->fetch();
     $total_balita = $result['total'];
-    
-    // Hitung status gizi baik
-    $stmt = $conn->prepare("
-        SELECT COUNT(DISTINCT b.id_balita) as total 
+
+    // Hitung status gizi baik milik pengguna
+    $stmt = $conn->prepare("SELECT COUNT(DISTINCT b.id_balita) as total
         FROM balita b
         JOIN pertumbuhan p ON b.id_balita = p.id_balita
-        WHERE b.id_akun = ? 
+        WHERE b.id_akun = ?
         AND p.status_gizi = 'Normal'
         AND p.id_pertumbuhan IN (
-            SELECT MAX(id_pertumbuhan) 
-            FROM pertumbuhan 
+            SELECT MAX(id_pertumbuhan)
+            FROM pertumbuhan
             WHERE id_balita = b.id_balita
         )
     ");
     $stmt->execute([$_SESSION['id_akun']]);
     $result = $stmt->fetch();
     $status_gizi_baik = $result['total'];
-    
-    // Hitung jadwal mendatang
-    $stmt = $conn->prepare("
-        SELECT COUNT(*) as total 
+
+    // Hitung jadwal mendatang milik pengguna
+    $stmt = $conn->prepare("SELECT COUNT(*) as total
         FROM jadwal j
         JOIN balita b ON j.id_balita = b.id_balita
-        WHERE b.id_akun = ? 
+        WHERE b.id_akun = ?
         AND j.tanggal >= NOW()
         AND j.status = 'terjadwal'
     ");
     $stmt->execute([$_SESSION['id_akun']]);
+    $result = $stmt->fetch();
+    $jadwal_mendatang = $result['total'];
+
+} else {
+    // Untuk tenaga_kesehatan dan admin: tampilkan statistik global (semua balita)
+    $stmt = $conn->prepare("SELECT COUNT(*) as total FROM balita");
+    $stmt->execute();
+    $result = $stmt->fetch();
+    $total_balita = $result['total'];
+
+    // Hitung status gizi baik secara keseluruhan (menggunakan pemeriksaan terakhir tiap balita)
+    $stmt = $conn->prepare("SELECT COUNT(DISTINCT b.id_balita) as total
+        FROM balita b
+        JOIN pertumbuhan p ON b.id_balita = p.id_balita
+        WHERE p.status_gizi = 'Normal'
+        AND p.id_pertumbuhan IN (
+            SELECT MAX(id_pertumbuhan)
+            FROM pertumbuhan
+            WHERE id_balita = b.id_balita
+        )
+    ");
+    $stmt->execute();
+    $result = $stmt->fetch();
+    $status_gizi_baik = $result['total'];
+
+    // Hitung jadwal mendatang secara global
+    $stmt = $conn->prepare("SELECT COUNT(*) as total
+        FROM jadwal j
+        JOIN balita b ON j.id_balita = b.id_balita
+        WHERE j.tanggal >= NOW()
+        AND j.status = 'terjadwal'
+    ");
+    $stmt->execute();
     $result = $stmt->fetch();
     $jadwal_mendatang = $result['total'];
 }
@@ -155,7 +180,7 @@ $stmt->execute([$_SESSION['id_akun']]);
 $jadwal = [];
 while ($row = $stmt->fetch()) {
     $jadwal[] = [
-        'judul' => htmlspecialchars($row['jenis_kegiatan']),
+        'judul' => htmlspecialchars($row['jenis']),
         'tanggal' => $row['formatted_date'],
         'lokasi' => htmlspecialchars($row['lokasi']),
         'balita' => htmlspecialchars($row['nama_balita'])
@@ -650,7 +675,9 @@ function getTimeAgo($timestamp) {
                     <div class="stat-value"><?php echo $total_balita; ?></div>
                     <div style="margin-top:12px; display:flex; gap:8px;">
                         <a href="data_balita.php" class="view-all" style="padding:6px 10px; background:#eef2ff; border-radius:8px; color:#334155; text-decoration:none; font-size:13px;">Lihat Data</a>
+                        <?php if ($user['role'] == 'pengguna'): ?>
                         <a href="data_balita.php?action=add" class="view-all" style="padding:6px 10px; background:#e6fffa; border-radius:8px; color:#065f46; text-decoration:none; font-size:13px;">Tambah Balita</a>
+                        <?php endif; ?>
                     </div>
                 </div>
                 <div class="stat-icon blue">😊</div>
@@ -710,19 +737,28 @@ function getTimeAgo($timestamp) {
                     <a href="jadwal.php" class="view-all">Lihat Semua Jadwal →</a>
                 </div>
                 
-                <?php foreach ($jadwal as $item): ?>
-                <div class="schedule-item">
-                    <div class="schedule-title"><?php echo $item['judul']; ?></div>
-                    <div style="font-size: 13px; color: #666; margin-bottom: 3px;">
-                        <?php echo $item['balita']; ?>
+                <?php if (count($jadwal) > 0): ?>
+                    <?php foreach ($jadwal as $item): ?>
+                    <div class="schedule-item">
+                        <div class="schedule-title"><?php echo $item['judul']; ?></div>
+                        <div style="font-size: 13px; color: #666; margin-bottom: 3px;">
+                            <?php echo $item['balita']; ?>
+                        </div>
+                        <div class="schedule-date">
+                            <span>📅</span>
+                            <span><?php echo $item['tanggal']; ?></span>
+                        </div>
+                        <div class="schedule-location"><?php echo $item['lokasi']; ?></div>
                     </div>
-                    <div class="schedule-date">
-                        <span>📅</span>
-                        <span><?php echo $item['tanggal']; ?></span>
+                    <?php endforeach; ?>
+                <?php else: ?>
+                    <div class="empty-state" style="text-align:center; padding:40px 0;">
+                        <div style="font-size:40px; margin-bottom:10px;">📅</div>
+                        <h3 style="color:#333; margin-bottom:10px;">Belum ada jadwal mendatang</h3>
+                        <p style="color:#666; margin-bottom:20px;">Jadwal imunisasi, konsultasi, atau pemeriksaan akan muncul di sini.</p>
+                        <a href="jadwal.php" class="btn btn-primary" style="padding:10px 30px; border-radius:25px; background:linear-gradient(90deg,#4FC3F7 0%,#66BB6A 100%); color:white; text-decoration:none; font-weight:600;">Lihat Jadwal</a>
                     </div>
-                    <div class="schedule-location"><?php echo $item['lokasi']; ?></div>
-                </div>
-                <?php endforeach; ?>
+                <?php endif; ?>
             </div>
         </div>
         
@@ -767,6 +803,13 @@ function getTimeAgo($timestamp) {
                 <?php if ($artikel_baru > 0): ?>
                 <div style="margin-top: 15px; background: rgba(255,255,255,0.2); padding: 10px 15px; border-radius: 8px; font-size: 13px;">
                     <?php echo $artikel_baru; ?> artikel baru dalam minggu ini
+                </div>
+                <?php else: ?>
+                <div style="margin-top: 15px; background: rgba(255,255,255,0.2); padding: 10px 15px; border-radius: 8px; font-size: 13px; text-align:center;">
+                    <div style="font-size:32px; margin-bottom:10px;">📚</div>
+                    <div style="color:#333; font-weight:600; margin-bottom:5px;">Belum ada artikel baru</div>
+                    <div style="color:#666; margin-bottom:10px;">Artikel dan tips akan muncul di sini jika tersedia.</div>
+                    <a href="artikel.php" class="btn btn-primary" style="padding:10px 30px; border-radius:25px; background:linear-gradient(90deg,#BA68C8 0%,#9C27B0 100%); color:white; text-decoration:none; font-weight:600;">Lihat Artikel</a>
                 </div>
                 <?php endif; ?>
             </div>

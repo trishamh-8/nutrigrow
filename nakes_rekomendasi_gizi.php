@@ -95,6 +95,7 @@ if ($mode == 'list') {
     $query_rekomendasi = "SELECT 
         rg.*,
         b.nama_balita,
+        a.id_akun AS id_ortu_akun,
         a.nama as nama_ortu
         FROM rekomendasi_gizi rg
         JOIN balita b ON rg.id_balita = b.id_balita
@@ -168,6 +169,9 @@ if ($mode == 'add') {
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
+        /* Ensure main content doesn't overlap the fixed sidebar */
+        .main-content { margin-left: 240px; }
+        @media (max-width: 768px) { .main-content { margin-left: 70px; } }
         .form-group {
             margin-bottom: 20px;
         }
@@ -394,7 +398,15 @@ if ($mode == 'add') {
                                 Rekomendasi untuk <?php echo htmlspecialchars($row['nama_balita']); ?>
                             </div>
                             <div class="rekomendasi-meta">
-                                <span><i class="fas fa-user"></i> Ortu: <?php echo htmlspecialchars($row['nama_ortu']); ?></span>
+                                <span><i class="fas fa-user"></i> Ortu: 
+                                    <?php if (!empty($row['id_ortu_akun'])): ?>
+                                        <a href="akun_detail.php?id=<?php echo $row['id_ortu_akun']; ?>">
+                                            <?php echo htmlspecialchars($row['nama_ortu']); ?>
+                                        </a>
+                                    <?php else: ?>
+                                        <?php echo htmlspecialchars($row['nama_ortu']); ?>
+                                    <?php endif; ?>
+                                </span>
                                 <span><i class="fas fa-calendar"></i> <?php echo formatTanggalIndo($row['tanggal_rekomendasi']); ?></span>
                             </div>
                         </div>

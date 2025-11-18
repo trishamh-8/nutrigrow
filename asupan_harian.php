@@ -96,32 +96,38 @@ if (isset($_GET['action']) && $_GET['action'] == 'delete' && isset($_GET['id']))
 // ========== PROSES TAMBAH/UPDATE DATA ==========
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $tanggal_catatan = $_POST['tanggal_catatan'];
-    $waktu_makan = $_POST['waktu_makan']; // Now using ENUM values from the database
+    $waktu_makan = $_POST['waktu_makan'];
     $jenis_makanan = $_POST['jenis_makanan'];
     $porsi = $_POST['porsi'];
-    $kalori_total = $_POST['kalori_total'];
-    $protein = $_POST['protein'];
-    $karbohidrat = $_POST['karbohidrat'];
-    $lemak = $_POST['lemak'];
+    $kalori_total = isset($_POST['kalori_total']) ? $_POST['kalori_total'] : 0;
+    $protein = isset($_POST['protein']) ? $_POST['protein'] : 0;
+    $karbohidrat = isset($_POST['karbohidrat']) ? $_POST['karbohidrat'] : 0;
+    $lemak = isset($_POST['lemak']) ? $_POST['lemak'] : 0;
     $id_asupan_edit = isset($_POST['id_asupan']) ? $_POST['id_asupan'] : null;
     
     // Validasi input
     if (empty($tanggal_catatan) || empty($waktu_makan) || empty($jenis_makanan) || 
-        empty($porsi) || $kalori_total < 0 || empty($karbohidrat) || empty($lemak)) {
+        empty($porsi) || $kalori_total < 0) {
         $error = "Semua field wajib diisi dengan benar!";
         $mode = $id_asupan_edit ? 'edit' : 'add';
     } else {
         if ($id_asupan_edit) {
-            // UPDATE data
+            // UPDATE data (include karbohidrat & lemak)
             $query_update = "UPDATE asupan_harian 
-                           SET tanggal_catatan = ?, waktu_makan = ?, jenis_makanan = ?, 
-                               porsi = ?, kalori_total = ?, protein = ?
+                           SET tanggal_catatan = ?, 
+                               waktu_makan = ?, 
+                               jenis_makanan = ?, 
+                               porsi = ?, 
+                               kalori_total = ?, 
+                               protein = ?,
+                               karbohidrat = ?,
+                               lemak = ?
                            WHERE id_asupan = ? AND id_balita = ?";
-            
+
             $stmt = $conn->prepare($query_update);
-            $stmt->bind_param("sssdddii", $tanggal_catatan, $waktu_makan, $jenis_makanan, 
-                            $porsi, $kalori_total, $protein, $id_asupan_edit, $id_balita);
-            
+            // types: s(tanggal), s(waktu), s(jenis), s(porsi), d(kalori), d(protein), d(karbo), d(lemak), i(id_asupan), i(id_balita)
+            $stmt->bind_param("ssssddddii", $tanggal_catatan, $waktu_makan, $jenis_makanan, $porsi, $kalori_total, $protein, $karbohidrat, $lemak, $id_asupan_edit, $selected_balita_id);
+
             if ($stmt->execute()) {
                 header("Location: asupan_harian.php?id_balita=" . $selected_balita_id . "&message=update_success");
                 exit;
@@ -130,15 +136,15 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
                 $mode = 'edit';
             }
         } else {
-            // INSERT data baru
+            // INSERT data baru (include karbohidrat & lemak)
             $query_insert = "INSERT INTO asupan_harian 
-                            (id_balita, tanggal_catatan, waktu_makan, jenis_makanan, porsi, kalori_total, protein) 
-                            VALUES (?, ?, ?, ?, ?, ?, ?)";
-            
+                            (id_balita, tanggal_catatan, waktu_makan, jenis_makanan, porsi, kalori_total, protein, karbohidrat, lemak) 
+                            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)";
+
             $stmt = $conn->prepare($query_insert);
-            $stmt->bind_param("isssddd", $selected_balita_id, $tanggal_catatan, $waktu_makan, $jenis_makanan, 
-                            $porsi, $kalori_total, $protein);
-            
+            // types: i(id_balita), s(tanggal), s(waktu), s(jenis), s(porsi), d(kalori), d(protein), d(karbo), d(lemak)
+            $stmt->bind_param("issssdddd", $selected_balita_id, $tanggal_catatan, $waktu_makan, $jenis_makanan, $porsi, $kalori_total, $protein, $karbohidrat, $lemak);
+
             if ($stmt->execute()) {
                 header("Location: asupan_harian.php?id_balita=" . $selected_balita_id . "&message=add_success");
                 exit;
@@ -350,13 +356,13 @@ if ($mode == 'list') {
         
         /* Main Content */
         .main-content {
-            /* sidebar is 240px; give extra breathing room for gap */
-            margin-left: 280px;
+            /* sidebar is 240px; keep consistent spacing */
+            margin-left: 240px;
             flex: 1;
             padding: 30px;
             box-sizing: border-box;
             min-height: 100vh;
-            width: calc(100% - 280px);
+            width: calc(100% - 240px);
             max-width: 100%;
             background: transparent;
         }
@@ -1007,13 +1013,33 @@ if ($mode == 'list') {
                         </div>
                     </div>
 
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">
+                                Protein (gram)
+                            </label>
+                            <input type="number" step="0.01" name="protein" class="form-input" 
+                                   placeholder="Contoh: 15" 
+                                   value="<?php echo $mode == 'edit' ? $edit_data['protein'] : '0'; ?>">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">
+                                Karbohidrat (gram)
+                            </label>
+                            <input type="number" step="0.01" name="karbohidrat" class="form-input" 
+                                   placeholder="Contoh: 45" 
+                                   value="<?php echo $mode == 'edit' ? $edit_data['karbohidrat'] : '0'; ?>">
+                        </div>
+                    </div>
+
                     <div class="form-group">
                         <label class="form-label">
-                            Protein (gram)
+                            Lemak (gram)
                         </label>
-                        <input type="number" step="0.01" name="protein" class="form-input" 
-                               placeholder="Contoh: 15" 
-                               value="<?php echo $mode == 'edit' ? $edit_data['protein'] : '0'; ?>">
+                        <input type="number" step="0.01" name="lemak" class="form-input" 
+                               placeholder="Contoh: 10" 
+                               value="<?php echo $mode == 'edit' ? $edit_data['lemak'] : '0'; ?>">
                     </div>
 
                     <div class="form-actions" style="justify-content: center;">

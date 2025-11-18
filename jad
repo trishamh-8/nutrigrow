@@ -1,0 +1,191 @@
+<?php
+session_start();
+require_once "config.php";
+$conn = getConnection();
+
+// Ambil data jadwal
+$stmt = $conn->prepare("
+    SELECT j.*, b.nama_balita 
+    FROM jadwal j
+    LEFT JOIN balita b ON j.id_balita = b.id_balita
+    ORDER BY j.tanggal ASC
+");
+$stmt->execute();
+$jadwal = $stmt->fetchAll(PDO::FETCH_ASSOC);
+?>
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <title>Jadwal Program</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            font-family: 'Inter', sans-serif;
+            background: #f5f6fa;
+            display: flex;
+        }
+
+        /* SIDEBAR */
+        .sidebar {
+            width: 240px;
+            background: #ffffff;
+            height: 100vh;
+            padding: 20px;
+            border-right: 1px solid #e5e7eb;
+            position: fixed;
+        }
+
+        .logo {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 40px;
+        }
+
+        .menu a {
+            display: block;
+            padding: 12px 16px;
+            border-radius: 8px;
+            text-decoration: none;
+            color: #333;
+            margin-bottom: 6px;
+            font-size: 15px;
+        }
+
+        .menu a.active {
+            background: #4f7df3;
+            color: #fff;
+        }
+
+        .content {
+            margin-left: 240px;
+            width: calc(100% - 240px);
+        }
+
+        /* HEADER */
+        .header {
+            height: 70px;
+            background: #ffffff;
+            border-bottom: 1px solid #e5e7eb;
+            display: flex;
+            align-items: center;
+            padding: 0 30px;
+            justify-content: space-between;
+        }
+
+        .search {
+            background: #f1f3f8;
+            padding: 10px 18px;
+            border-radius: 20px;
+            width: 280px;
+            border: none;
+            outline: none;
+        }
+
+        .profile {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        /* CONTENT */
+        .page-container {
+            padding: 30px;
+        }
+
+        h1 {
+            margin-bottom: 25px;
+        }
+
+        .card {
+            background: #e9e9e9;
+            padding: 25px;
+            border-radius: 16px;
+            margin-bottom: 22px;
+        }
+
+        .judul {
+            font-size: 22px;
+            font-weight: 700;
+            margin-bottom: 4px;
+        }
+
+        .dokter {
+            font-size: 15px;
+            font-weight: 600;
+            margin-bottom: 10px;
+            color: #444;
+        }
+
+        .deskripsi {
+            font-size: 14px;
+            color: #555;
+            margin-bottom: 18px;
+        }
+
+        .tanggal {
+            font-size: 16px;
+            font-weight: 600;
+        }
+    </style>
+</head>
+
+<body>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+    <div class="logo">NutriGrow</div>
+
+    <div class="menu">
+        <a href="dashboard.php">Dashboard</a>
+        <a href="artikel.php">Artikel</a>
+        <a href="pertumbuhan.php">Pertumbuhan Balita</a>
+        <a href="asupan.php">Asupan Harian</a>
+        <a href="laporan.php">Laporan Kesehatan</a>
+        <a href="jadwal.php" class="active">Jadwal Program</a>
+    </div>
+
+    <div style="position:absolute; bottom:40px;">
+        <a href="profil.php">Profil</a>
+        <a href="settings.php">Settings</a>
+        <a href="logout.php">Logout</a>
+    </div>
+</div>
+
+<!-- CONTENT -->
+<div class="content">
+    <div class="header">
+        <input type="text" class="search" placeholder="Search">
+
+        <div class="profile">
+            <span><?php echo $_SESSION['nama'] ?? "User"; ?></span>
+        </div>
+    </div>
+
+    <div class="page-container">
+        <h1>Jadwal Program</h1>
+
+        <?php foreach ($jadwal as $j): ?>
+            <div class="card">
+                <div class="judul"><?php echo htmlspecialchars($j['judul']); ?></div>
+
+                <div class="dokter">
+                    <?php echo ucfirst($j['jenis']); ?> • 
+                    <?php echo $j['nama_balita'] ?? 'Balita Tidak Ditemukan'; ?>
+                </div>
+
+                <div class="deskripsi">
+                    <?php echo nl2br(htmlspecialchars($j['deskripsi'])); ?>
+                </div>
+
+                <div class="tanggal">
+                    <?php echo date("d F Y H:i", strtotime($j['tanggal'])); ?>
+                </div>
+            </div>
+        <?php endforeach; ?>
+    </div>
+</div>
+
+</body>
+</html>
