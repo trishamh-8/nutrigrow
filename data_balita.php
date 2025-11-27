@@ -228,429 +228,353 @@ function hitungUsia($tanggal_lahir) {
     <title>Kelola Identitas Balita - NutriGrow</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <?php include __DIR__ . '/partials/common_head.php'; ?>
     <style>
-            <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: #f5f7fa;
+        /* Wrapper layout matching body flex structure */
+        .wrapper {
             display: flex;
+            width: 100%;
             min-height: 100vh;
         }
-        
-        /* Sidebar */
-        .sidebar {
-            width: 240px;
-            background: white;
-            padding: 20px;
-            box-shadow: 2px 0 10px rgba(0,0,0,0.05);
-            position: fixed;
-            height: 100vh;
-            overflow-y: auto;
-        }
-        
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 30px;
-            padding: 10px;
-        }
-        
-        .logo-icon {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #4FC3F7 0%, #66BB6A 100%);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-        }
-        
-        .logo-text {
-            font-size: 20px;
-            font-weight: 700;
-        }
-        
-        .logo-text .nutri {
-            color: #4FC3F7;
-        }
-        
-        .menu {
-            list-style: none;
-        }
-        
-        .menu-item {
-            margin-bottom: 5px;
-        }
-        
-        .menu-link {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 15px;
-            border-radius: 10px;
-            text-decoration: none;
-            color: #666;
-            transition: all 0.3s;
-        }
-        
-        .menu-link:hover {
-            background: #f0f0f0;
-            color: #333;
-        }
-        
-        .menu-link.active {
-            background: linear-gradient(90deg, #4FC3F7 0%, #66BB6A 100%);
-            color: white;
-        }
-        
-        .menu-icon {
-            font-size: 20px;
-        }
-        
-        .menu-divider {
-            height: 1px;
-            background: #e0e0e0;
-            margin: 20px 0;
-        }
-        
-        .logout-link {
-            color: #f44336;
-        }
-        
-        .logout-link:hover {
-            background: #ffebee;
-        }
 
-        /* Main Content */
-        .main-content {
-            position: absolute;
-            left: 240px;
-            right: 0;
-            top: 0;
-            bottom: 0;
-            padding: 20px;
-            overflow-y: auto;
-        }
-
-        /* Back Button */
-        .btn-back {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 15px;
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            color: #475569;
-            text-decoration: none;
-            font-size: 14px;
-            transition: all 0.3s ease;
-        }
-
-        .btn-back:hover {
-            background: #f1f5f9;
-            color: #1e293b;
-        }
-
-        /* Content Card */
-        .content-card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
-            padding: 25px;
-            margin-bottom: 20px;
-            width: 100%;
-        }
-
-        /* Form Container */
-        .form-container {
-            max-width: none;
-            width: 100%;
-        }
-
-        /* Custom Scrollbar */
-        .main-content::-webkit-scrollbar {
-            width: 8px;
-        }
-
-        .main-content::-webkit-scrollbar-track {
-            background: #f1f5f9;
-            border-radius: 4px;
-        }
-
-        .main-content::-webkit-scrollbar-thumb {
-            background: #cbd5e1;
-            border-radius: 4px;
-        }
-
-        .main-content::-webkit-scrollbar-thumb:hover {
-            background: #94a3b8;
-        }
-
-        .form-group {/* Lines 167-168 omitted */}
-            margin-bottom: 20px;
-        }
-        
-        .form-label {
-            display: block;
-            font-size: 14px;
-            font-weight: 600;
-            color: #1e293b;
-            margin-bottom: 8px;
-        }
-        
-        .form-label .required {
-            color: #dc2626;
-        }
-        
-        .form-input, .form-select {
-            width: 100%;
-            padding: 12px 16px;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            font-size: 14px;
-            transition: all 0.3s ease;
-        }
-        
-        .form-input:focus, .form-select:focus {
-            outline: none;
-            border-color: #06b6d4;
-            box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.1);
-        }
-        
-        .form-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 20px;
-        }
-        
-        .alert {
-            padding: 15px 20px;
-            border-radius: 8px;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .alert-error {
-            background: #fee2e2;
-            color: #dc2626;
-            border: 1px solid #fecaca;
-        }
-        
-        .alert-success {
-            background: #d1fae5;
-            color: #059669;
-            border: 1px solid #a7f3d0;
-        }
-        
-        .form-actions {
-            display: flex;
-            gap: 15px;
-            margin-top: 30px;
-            justify-content: center;
-        }
-        
-        .btn-primary, .btn-secondary {
-            padding: 12px 30px;
-            border-radius: 25px;
-            font-size: 14px;
-            font-weight: 600;
-            transition: all 0.3s ease;
-            min-width: 180px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-        }
-
-        .btn-primary {
-            background: linear-gradient(90deg, #4FC3F7 0%, #66BB6A 100%);
-            color: white;
-            border: none;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 4px 12px rgba(79, 195, 247, 0.2);
-        }
-        
-        .btn-secondary {
-            background: #f1f5f9;
-            color: #475569;
-            border: 1px solid #e2e8f0;
-        }
-        
-        .btn-secondary:hover {
-            background: #e2e8f0;
-            transform: translateY(-2px);
-        }
-        
+        /* Balita card with enhanced gradient and spacing */
         .balita-card {
-            background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
-            border-radius: 15px;
-            padding: 25px;
-            color: white;
-            margin-bottom: 20px;
-            display: flex;
-            align-items: center;
-            gap: 20px;
+            background: linear-gradient(135deg, #f0f9ff 0%, #f0fdf4 100%);
+            border: 1px solid #e0f2fe;
+            padding: 24px;
+            border-radius: 16px;
+            box-shadow: 0 2px 12px rgba(2,6,23,0.06), 0 0 20px rgba(79,195,247,0.08);
+            margin-bottom: 0;
+            width: 100%;
+            box-sizing: border-box;
+            transition: all 0.3s ease;
         }
-        
+
+        .balita-card:hover {
+            box-shadow: 0 4px 20px rgba(2,6,23,0.1), 0 0 30px rgba(79,195,247,0.12);
+            transform: translateY(-2px);
+        }
+
+        .balita-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 16px;
+        }
+
         .balita-avatar {
-            width: 70px;
-            height: 70px;
-            background: rgba(255, 255, 255, 0.2);
-            border-radius: 50%;
+            width: 64px;
+            height: 64px;
+            border-radius: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
             font-size: 32px;
+            color: white;
+            background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+            flex-shrink: 0;
+            margin-right: 16px;
+            box-shadow: 0 2px 8px rgba(6, 182, 212, 0.3);
         }
-        
-        .balita-info {
+
+        .balita-info-block {
             flex: 1;
         }
-        
-        .balita-name {
-            font-size: 24px;
-            font-weight: 700;
-            margin-bottom: 5px;
+
+        .balita-name { 
+            font-size: 20px; 
+            font-weight: 700; 
+            color: #0f172a; 
+            margin-bottom: 6px;
         }
-        
-        .balita-age {
-            font-size: 14px;
-            opacity: 0.9;
+        .balita-age { 
+            color: #64748b; 
+            font-size: 14px; 
+            margin-bottom: 14px;
         }
-        
-        .balita-details {
+
+        .balita-details-row { 
             display: grid;
             grid-template-columns: repeat(3, 1fr);
-            gap: 20px;
-            margin-top: 15px;
+            gap: 28px;
+            margin-bottom: 18px;
+            padding: 16px 0;
+            border-top: 1px solid rgba(203,213,225,0.3);
+            border-bottom: 1px solid rgba(203,213,225,0.3);
         }
-        
-        .detail-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        
-        .detail-icon {
-            font-size: 18px;
-        }
-        
-        .detail-content {
-            flex: 1;
-        }
-        
-        .detail-label {
-            font-size: 11px;
-            opacity: 0.8;
-        }
-        
-        .detail-value {
-            font-size: 14px;
-            font-weight: 600;
-        }
-        
-        .balita-actions {
+
+        .balita-detail { 
             display: flex;
             gap: 10px;
+            align-items: flex-start;
         }
-        
-        .btn-icon-white {
-            width: 40px;
-            height: 40px;
-            background: rgba(255, 255, 255, 0.2);
-            border: none;
-            border-radius: 8px;
-            color: white;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s ease;
+        .detail-icon { 
+            font-size: 20px; 
+            flex-shrink: 0;
+            margin-top: 2px;
         }
-        
-        .btn-icon-white:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-        
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-        }
-        
-        .empty-icon {
-            font-size: 64px;
-            color: #e2e8f0;
-            margin-bottom: 20px;
-        }
-        
-        .photo-upload {
-            text-align: center;
-            margin-bottom: 30px;
+        .detail-content { 
             display: flex;
             flex-direction: column;
-            align-items: center;
+            gap: 4px;
         }
-        
-        .photo-preview {
-            width: 150px;
-            height: 150px;
-            margin: 0 auto 15px;
-            background: #f1f5f9;
-            border-radius: 50%;
+        .detail-label { 
+            font-size: 12px; 
+            color: #64748b; 
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .detail-value { 
+            font-size: 15px; 
+            color: #1e293b; 
+            font-weight: 600;
+        }
+
+        .balita-actions { 
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+            margin-top: 6px;
+        }
+        .btn-icon-sm { 
+            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); 
+            border: none; 
+            padding: 10px 16px; 
+            border-radius: 10px; 
+            cursor: pointer; 
+            color: white;
+            font-size: 14px;
+            font-weight: 500;
             display: flex;
             align-items: center;
-            justify-content: center;
-            font-size: 48px;
-            color: #94a3b8;
-            border: 2px dashed #e2e8f0;
-            cursor: pointer;
+            gap: 8px;
             transition: all 0.3s ease;
+            box-shadow: 0 2px 8px rgba(6, 182, 212, 0.2);
         }
-        
-        .photo-preview:hover {
-            border-color: #06b6d4;
-            background: #f0fdff;
+        .btn-icon-sm:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(6, 182, 212, 0.4);
+            background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
         }
-        
-        .photo-link {
-            background: #06b6d4;
-            color: white;
+        .btn { 
+            padding: 10px 18px; 
+            border-radius: 10px; 
+            cursor: pointer; 
             text-decoration: none;
             font-size: 14px;
             font-weight: 500;
-            padding: 8px 20px;
-            border-radius: 20px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
             transition: all 0.3s ease;
-            margin-top: 10px;
+        }
+        .btn-primary { 
+            background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%); 
+            color: #fff; 
+            border: none;
+            box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+        }
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 16px rgba(59, 130, 246, 0.4);
+            background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        }
+        .btn-secondary { 
+            background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); 
+            color: white; 
+            border: none;
+            box-shadow: 0 2px 8px rgba(6, 182, 212, 0.2);
+        }
+        .btn-secondary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(6, 182, 212, 0.4);
+            background: linear-gradient(135deg, #0891b2 0%, #0e7490 100%);
+        }
+
+        /* Form styling */
+        .form-container {
+            width: 100%;
+            box-sizing: border-box;
+        }
+
+        .form-row {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 24px;
+            margin-bottom: 24px;
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+        .form-label {
+            font-size: 15px;
+            font-weight: 600;
+            color: #1e293b;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .required {
+            color: #dc2626;
+            font-size: 14px;
+        }
+
+        .form-input,
+        .form-select {
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: inherit;
+            transition: all 0.3s ease;
+            background: white;
+            color: #1e293b;
+        }
+
+        .form-input:focus,
+        .form-select:focus {
+            outline: none;
+            border-color: #06b6d4;
+            box-shadow: 0 0 0 3px rgba(6, 182, 212, 0.1);
+            background: #f0f9ff;
+        }
+
+        .form-input::placeholder {
+            color: #94a3b8;
+        }
+
+        .form-select {
+            cursor: pointer;
+            appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 12 12'%3E%3Cpath fill='%2364748b' d='M6 9L1 4h10z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 12px center;
+            padding-right: 36px;
+        }
+
+        .photo-upload {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 28px;
+            padding: 24px;
+            background: linear-gradient(135deg, #f0f9ff 0%, #f0fdf4 100%);
+            border: 2px dashed #cbd5e1;
+            border-radius: 12px;
+        }
+
+        .photo-preview {
+            width: 100px;
+            height: 100px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #06b6d4 0%, #3b82f6 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 36px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+
+        .photo-preview:hover {
+            transform: scale(1.05);
+        }
+
+        .photo-link {
+            color: #06b6d4;
+            font-size: 14px;
+            font-weight: 500;
+            text-decoration: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.3s ease;
         }
 
         .photo-link:hover {
-            background: #0891b2;
-            transform: translateY(-2px);
+            color: #0891b2;
         }
-        
-        @media (max-width: 768px) {
-            .form-row {
-                grid-template-columns: 1fr;
-            }
-            
-            .balita-details {
-                grid-template-columns: 1fr;
-            }
+
+        .form-actions {
+            display: flex;
+            justify-content: center;
+            gap: 16px;
+            margin-top: 32px;
+            padding-top: 24px;
+            border-top: 1px solid #e2e8f0;
+        }
+
+        /* Ensure content-card/empty-state stays consistent */
+        .content-card .empty-state { text-align:center; padding:40px; }
+        .empty-icon { font-size:48px; margin-bottom:16px; }
+
+        /* Alert styling */
+        .alert {
+            padding: 16px 20px;
+            border-radius: 10px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-size: 14px;
+        }
+
+        .alert-success {
+            background: #dbeafe;
+            color: #0c4a6e;
+            border: 1px solid #bae6fd;
+        }
+
+        .alert-error {
+            background: #fee2e2;
+            color: #7f1d1d;
+            border: 1px solid #fecaca;
+        }
+
+        /* Back button */
+        .btn-back {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            color: #06b6d4;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            padding: 8px 12px;
+            border-radius: 8px;
+            transition: all 0.3s ease;
+        }
+
+        .btn-back:hover {
+            background: #f0f9ff;
+            color: #0891b2;
+        }
+
+        /* Page header */
+        .page-header {
+            margin-bottom: 32px;
+        }
+
+        .page-header h1 {
+            font-size: 28px;
+            font-weight: 700;
+            color: #0f172a;
+            margin-bottom: 8px;
+        }
+
+        .page-header p {
+            font-size: 15px;
+            color: #64748b;
         }
     </style>
 </head>
@@ -700,66 +624,69 @@ function hitungUsia($tanggal_lahir) {
                         }
                     ?>
                     <div style="margin-bottom: 20px;">
-                        <a class="btn btn-primary" href="<?php echo $addUrl; ?>">
+                        <a class="btn btn-primary" href="<?php echo $addUrl; ?>" style="border:none!important; box-shadow:none!important;">
                             <i class="fas fa-plus"></i> Tambah Balita
                         </a>
                     </div>
                     <?php endif; ?>
 
             <!-- Data Balita -->
+            <div style="display: flex; flex-direction: column; gap: 20px;">
             <?php if ($result_balita->num_rows > 0): ?>
                 <?php while ($row = $result_balita->fetch_assoc()): ?>
                 <div class="balita-card">
-                    <div class="balita-avatar">
-                        <?php echo $row['jenis_kelamin'] == 'L' ? '👦' : '👧'; ?>
-                    </div>
-                    <div class="balita-info">
-                        <div class="balita-name"><?php echo htmlspecialchars($row['nama_balita']); ?></div>
-                        <div class="balita-age"><?php echo hitungUsia($row['tanggal_lahir']); ?></div>
-                        
-                        <div class="balita-details">
-                            <div class="detail-item">
-                                <div class="detail-icon">📅</div>
-                                <div class="detail-content">
-                                    <div class="detail-label">Tanggal Lahir</div>
-                                    <div class="detail-value"><?php echo formatTanggalIndo($row['tanggal_lahir']); ?></div>
-                                </div>
+                    <div class="balita-card-header">
+                        <div style="display: flex; gap: 16px; flex: 1;">
+                            <div class="balita-avatar">
+                                <?php echo $row['jenis_kelamin'] == 'L' ? '👦' : '👧'; ?>
                             </div>
-                            
-                            <div class="detail-item">
-                                <div class="detail-icon">⚧</div>
-                                <div class="detail-content">
-                                    <div class="detail-label">Jenis Kelamin</div>
-                                    <div class="detail-value"><?php echo $row['jenis_kelamin'] == 'L' ? 'Laki-laki' : 'Perempuan'; ?></div>
-                                </div>
-                            </div>
-                            
-                            <div class="detail-item">
-                                <div class="detail-icon">📍</div>
-                                <div class="detail-content">
-                                    <div class="detail-label">Alamat</div>
-                                    <div class="detail-value">
-                                        <?php echo htmlspecialchars($row['alamat_balita'] ?? 'Belum diisi'); ?>
-                                    </div>
-                                </div>
+                            <div class="balita-info-block">
+                                <div class="balita-name"><?php echo htmlspecialchars($row['nama_balita']); ?></div>
+                                <div class="balita-age"><?php echo hitungUsia($row['tanggal_lahir']); ?></div>
                             </div>
                         </div>
                     </div>
-                    
+
+                    <div class="balita-details-row">
+                        <div class="balita-detail">
+                            <div class="detail-icon">📅</div>
+                            <div class="detail-content">
+                                <div class="detail-label">Tanggal Lahir</div>
+                                <div class="detail-value"><?php echo formatTanggalIndo($row['tanggal_lahir']); ?></div>
+                            </div>
+                        </div>
+                        
+                        <div class="balita-detail">
+                            <div class="detail-icon">⚧</div>
+                            <div class="detail-content">
+                                <div class="detail-label">Jenis Kelamin</div>
+                                <div class="detail-value"><?php echo $row['jenis_kelamin'] == 'L' ? 'Laki-laki' : 'Perempuan'; ?></div>
+                            </div>
+                        </div>
+                        
+                        <div class="balita-detail">
+                            <div class="detail-icon">📍</div>
+                            <div class="detail-content">
+                                <div class="detail-label">Alamat</div>
+                                <div class="detail-value"><?php echo htmlspecialchars($row['alamat_balita'] ?? 'Belum diisi'); ?></div>
+                            </div>
+                        </div>
+                    </div>
+
                     <div class="balita-actions">
                         <?php if (($user['role'] ?? '') == 'pengguna'): ?>
-                        <button class="btn-icon-white" onclick="location.href='data_balita.php?action=edit&id=<?php echo $row['id_balita']; ?>'" title="Edit">
-                            <i class="fas fa-edit"></i>
+                        <button class="btn-icon-sm" onclick="location.href='data_balita.php?action=edit&id=<?php echo $row['id_balita']; ?>'">
+                            <i class="fas fa-edit"></i> Edit
                         </button>
-                        <button class="btn-icon-white" onclick="hapusBalita(<?php echo $row['id_balita']; ?>)" title="Hapus">
-                            <i class="fas fa-trash"></i>
+                        <button class="btn-icon-sm" onclick="hapusBalita(<?php echo $row['id_balita']; ?>)">
+                            <i class="fas fa-trash"></i> Hapus
                         </button>
-                        <button class="btn btn-secondary" onclick="location.href='pertumbuhan.php?id=<?php echo $row['id_balita']; ?>'" title="Lihat Pertumbuhan">
+                        <button class="btn btn-secondary" onclick="location.href='pertumbuhan.php?id=<?php echo $row['id_balita']; ?>'">
                             <i class="fas fa-chart-line"></i> Pertumbuhan
                         </button>
                         <?php else: ?>
                         <!-- Tenaga Kesehatan: view-only controls -->
-                        <button class="btn btn-secondary" onclick="location.href='status_gizi.php?id_balita=<?php echo $row['id_balita']; ?>'" title="Lihat Status Gizi">
+                        <button class="btn btn-secondary" onclick="location.href='status_gizi.php?id_balita=<?php echo $row['id_balita']; ?>'">
                             <i class="fas fa-heartbeat"></i> Lihat Status Gizi
                         </button>
                         <a class="btn btn-secondary" href="akun_detail.php?id=<?php echo $row['id_ortu_akun'] ?? ($row['id_akun'] ?? ''); ?>">
@@ -781,6 +708,7 @@ function hitungUsia($tanggal_lahir) {
                 </div>
             </div>
             <?php endif; ?>
+            </div>
 
             <?php elseif ($mode == 'add' || $mode == 'edit'): ?>
             <!-- ========== MODE ADD / EDIT ========== -->

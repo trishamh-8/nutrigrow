@@ -1,6 +1,6 @@
 <?php
 // rekomendasi_gizi.php - Halaman Rekomendasi Gizi
-require_once 'config.php';
+require_once 'auth.php';
 requireLogin();
 
 $conn = getDBConnection();
@@ -62,6 +62,15 @@ $counts = $result_count->fetch_assoc();
     <title>Rekomendasi Gizi - NutriGrow</title>
     <link rel="stylesheet" href="style.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <?php include __DIR__ . '/partials/common_head.php'; ?>
+    <style>
+        /* Wrapper layout matching body flex structure */
+        .container {
+            display: flex;
+            width: 100%;
+            min-height: 100vh;
+        }
+    </style>
 </head>
 <body>
     <div class="container">
@@ -71,17 +80,16 @@ $counts = $result_count->fetch_assoc();
         <main class="main-content">
             <!-- Header -->
             <header class="header">
-                <div class="search-bar">
-                    <input type="text" class="search-input" placeholder="Cari artikel, data balita, atau informasi...">
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" class="search-input" placeholder="Cari rekomendasi gizi...">
                 </div>
-                <div class="user-profile">
-                    <div class="user-info">
+                <div class="user-info">
+                    <div>
                         <h4><?php echo htmlspecialchars($_SESSION['nama']); ?></h4>
                         <p>Orang Tua</p>
                     </div>
-                    <div class="user-avatar">
-                        <i class="fas fa-user"></i>
-                    </div>
+                    <div class="avatar"><i class="fas fa-user"></i></div>
                 </div>
             </header>
 

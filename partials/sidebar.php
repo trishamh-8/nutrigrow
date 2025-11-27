@@ -33,7 +33,9 @@ $isNakes = isset($_SESSION['role']) && $_SESSION['role'] === 'tenaga_kesehatan';
     .sidebar { width: 240px; background: white; padding: 20px; box-shadow: 2px 0 10px rgba(0,0,0,0.05); position: fixed; height: 100vh; overflow-y: auto; }
     .logo { display:flex; align-items:center; gap:10px; margin-bottom:18px; }
     .logo-icon { width:40px; height:40px; border-radius:10px; display:flex; align-items:center; justify-content:center; font-size:20px; background: linear-gradient(135deg,#4FC3F7 0%,#66BB6A 100%); color:#fff }
-    .logo-text { font-size:18px; font-weight:700; color:#0D9488 }
+    /* Use consistent brand colors from common_head: primary part 'Nutri' and 'Grow' will inherit styles */
+    .logo-text { font-size:18px; font-weight:700; color: #66BB6A; }
+    .logo-text .nutri { color: #4FC3F7; }
     .menu { list-style:none; padding:0; margin: 10px 0; }
     .menu-item { margin-bottom:6px }
     .menu-link { display:flex; align-items:center; gap:12px; padding:10px 14px; border-radius:10px; color:#475569; text-decoration:none; transition:all .18s ease }
@@ -46,7 +48,7 @@ $isNakes = isset($_SESSION['role']) && $_SESSION['role'] === 'tenaga_kesehatan';
 <aside class="sidebar">
     <div class="logo">
         <div class="logo-icon">📈</div>
-        <div class="logo-text" style="color: #0D9488;"><span class="nutri">Nutri</span>Grow</div>
+        <div class="logo-text"><span class="nutri">Nutri</span>Grow</div>
     </div>
 
     <ul class="menu nav-menu">
@@ -77,7 +79,7 @@ $isNakes = isset($_SESSION['role']) && $_SESSION['role'] === 'tenaga_kesehatan';
             </a>
         </li>
         <li class="menu-item nav-item">
-            <a href="nakes_rekomendasi_gizi.php" class="<?php echo isActiveFor($menuMap['rekomendasi']); ?>">
+            <a href="rekomendasi.php" class="<?php echo isActiveFor($menuMap['rekomendasi']); ?>">
                 <span class="menu-icon">📝</span>
                 <span>Rekomendasi Gizi</span>
             </a>
@@ -88,6 +90,12 @@ $isNakes = isset($_SESSION['role']) && $_SESSION['role'] === 'tenaga_kesehatan';
             <a href="asupan_harian.php" class="<?php echo isActiveFor($menuMap['asupan']); ?>">
                 <span class="menu-icon">🍽️</span>
                 <span>Asupan Harian</span>
+            </a>
+        </li>
+        <li class="menu-item nav-item">
+            <a href="rekomendasi.php" class="<?php echo isActiveFor($menuMap['rekomendasi']); ?>">
+                <span class="menu-icon">📝</span>
+                <span>Rekomendasi Gizi</span>
             </a>
         </li>
         <?php endif; ?>

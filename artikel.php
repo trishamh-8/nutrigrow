@@ -13,6 +13,9 @@ $stmt = $conn->prepare("SELECT * FROM akun WHERE id_akun = ?");
 $stmt->execute([$_SESSION['id_akun']]);
 $user = $stmt->fetch();
 
+// Determine role (uses config helper)
+$user['role'] = getUserRole($conn, $_SESSION['id_akun']);
+
 if (!$user) {
     session_destroy();
     header('Location: login.php');
@@ -95,464 +98,34 @@ $artikelPopuler = $stmtPopuler->fetchAll();
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Artikel - NutriGrow</title>
+    <?php include __DIR__ . '/partials/common_head.php'; ?>
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-        
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background: #f5f7fa;
-            display: flex;
-            min-height: 100vh;
-        }
-        
-        .sidebar {
-            width: 240px;
-            background: white;
-            padding: 20px;
-            box-shadow: 2px 0 10px rgba(0,0,0,0.05);
-            position: fixed;
-            height: 100vh;
-            overflow-y: auto;
-        }
-        
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-bottom: 30px;
-            padding: 10px;
-        }
-        
-        .logo-icon {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #4FC3F7 0%, #66BB6A 100%);
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 20px;
-        }
-        
-        .logo-text {
-            font-size: 20px;
-            font-weight: 700;
-        }
-        
-        .logo-text .nutri { color: #4FC3F7; }
-        
-        .menu {
-            list-style: none;
-        }
-        
-        .menu-item {
-            margin-bottom: 5px;
-        }
-        
-        .menu-link {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 15px;
-            border-radius: 10px;
-            text-decoration: none;
-            color: #666;
-            transition: all 0.3s;
-        }
-        
-        .menu-link:hover {
-            background: #f0f0f0;
-            color: #333;
-        }
-        
-        .menu-link.active {
-            background: linear-gradient(90deg, #4FC3F7 0%, #66BB6A 100%);
-            color: white;
-        }
-        
-        .menu-icon {
-            font-size: 20px;
-        }
-        
-        .menu-divider {
-            height: 1px;
-            background: #e0e0e0;
-            margin: 20px 0;
-        }
-        
-        .logout-link {
-            color: #f44336;
-        }
-        
-        .logout-link:hover {
-            background: #ffebee;
-        }
-        
-        .main-content {
-            margin-left: 240px;
-            flex: 1;
-            padding: 20px 40px;
-        }
-        
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 30px;
-        }
-        
-        .search-box {
-            flex: 1;
-            max-width: 600px;
-            position: relative;
-        }
-        
-        .search-input {
-            width: 100%;
-            padding: 12px 20px 12px 45px;
-            border: 1px solid #e0e0e0;
-            border-radius: 25px;
-            font-size: 14px;
-        }
-        
-        .search-icon {
-            position: absolute;
-            left: 15px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #999;
-        }
-        
-        .user-info {
-            display: flex;
-            align-items: center;
-            gap: 15px;
-        }
-        
-        .avatar {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #4FC3F7 0%, #66BB6A 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 18px;
-        }
-        
-        .page-header {
-            margin-bottom: 30px;
-        }
-        
-        .page-header h1 {
-            font-size: 32px;
-            color: #333;
-            margin-bottom: 8px;
-        }
-        
-        .page-subtitle {
-            color: #666;
-            font-size: 14px;
-        }
-        
-        .filter-section {
-            background: white;
-            padding: 20px;
-            border-radius: 15px;
-            margin-bottom: 30px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-        }
-        
-        .filter-tabs {
-            display: flex;
-            gap: 10px;
-            flex-wrap: wrap;
-        }
-        
-        .filter-tab {
-            padding: 10px 20px;
-            border: 2px solid #e0e0e0;
-            border-radius: 25px;
-            background: white;
-            color: #666;
-            text-decoration: none;
-            font-size: 14px;
-            transition: all 0.3s;
-        }
-        
-        .filter-tab:hover {
-            border-color: #4FC3F7;
-            color: #4FC3F7;
-        }
-        
-        .filter-tab.active {
-            background: linear-gradient(90deg, #4FC3F7 0%, #66BB6A 100%);
-            border-color: transparent;
-            color: white;
-        }
-        
-        .content-grid {
-            display: grid;
-            grid-template-columns: 1fr 300px;
-            gap: 30px;
-        }
-        
-        .artikel-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: 25px;
-        }
-        
-        .artikel-card {
-            background: white;
-            border-radius: 15px;
-            overflow: hidden;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            transition: transform 0.3s, box-shadow 0.3s;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .artikel-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 5px 20px rgba(0,0,0,0.1);
-        }
-        
-        .artikel-image {
-            width: 100%;
-            height: 180px;
-            object-fit: cover;
-            background: linear-gradient(135deg, #e3f2fd 0%, #e8f5e9 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 48px;
-        }
-        
-        .artikel-content {
-            padding: 20px;
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-        }
-        
-        .artikel-kategori {
-            display: inline-block;
-            padding: 5px 12px;
-            border-radius: 15px;
-            font-size: 11px;
-            font-weight: 600;
-            text-transform: uppercase;
-            margin-bottom: 10px;
-        }
-        
-        .kategori-gizi { background: #e8f5e9; color: #2e7d32; }
-        .kategori-kesehatan { background: #e3f2fd; color: #1565c0; }
-        .kategori-tumbuh_kembang { background: #f3e5f5; color: #6a1b9a; }
-        .kategori-tips { background: #fff3e0; color: #e65100; }
-        .kategori-resep { background: #fce4ec; color: #c2185b; }
-        
-        .artikel-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 10px;
-            line-height: 1.4;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
-        
-        .artikel-title a {
-            color: inherit;
-            text-decoration: none;
-        }
-        
-        .artikel-title a:hover {
-            color: #4FC3F7;
-        }
-        
-        .artikel-ringkasan {
-            font-size: 13px;
-            color: #666;
-            line-height: 1.6;
-            margin-bottom: 15px;
-            display: -webkit-box;
-            -webkit-line-clamp: 3;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-            flex: 1;
-        }
-        
-        .artikel-footer {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding-top: 15px;
-            border-top: 1px solid #f0f0f0;
-        }
-        
-        .artikel-meta {
-            display: flex;
-            gap: 15px;
-            font-size: 12px;
-            color: #999;
-        }
-        
-        .meta-item {
-            display: flex;
-            align-items: center;
-            gap: 5px;
-        }
-        
-        .bookmark-btn {
-            background: none;
-            border: none;
-            font-size: 20px;
-            cursor: pointer;
-            transition: transform 0.2s;
-        }
-        
-        .bookmark-btn:hover {
-            transform: scale(1.2);
-        }
-        
-        .sidebar-widget {
-            background: white;
-            padding: 25px;
-            border-radius: 15px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.05);
-            margin-bottom: 20px;
-        }
-        
-        .widget-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 2px solid #4FC3F7;
-        }
-        
-        .populer-item {
-            display: flex;
-            gap: 12px;
-            padding: 12px 0;
-            border-bottom: 1px solid #f0f0f0;
-        }
-        
-        .populer-item:last-child {
-            border-bottom: none;
-        }
-        
-        .populer-image {
-            width: 60px;
-            height: 60px;
-            border-radius: 8px;
-            object-fit: cover;
-            background: linear-gradient(135deg, #e3f2fd 0%, #e8f5e9 100%);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 24px;
-            flex-shrink: 0;
-        }
-        
-        .populer-content {
-            flex: 1;
-        }
-        
-        .populer-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: #333;
-            margin-bottom: 5px;
-            line-height: 1.3;
-            display: -webkit-box;
-            -webkit-line-clamp: 2;
-            -webkit-box-orient: vertical;
-            overflow: hidden;
-        }
-        
-        .populer-title a {
-            color: inherit;
-            text-decoration: none;
-        }
-        
-        .populer-title a:hover {
-            color: #4FC3F7;
-        }
-        
-        .populer-views {
-            font-size: 12px;
-            color: #999;
-        }
-        
-        .pagination {
-            display: flex;
-            justify-content: center;
-            gap: 10px;
-            margin-top: 40px;
-        }
-        
-        .page-link {
-            padding: 10px 15px;
-            border: 1px solid #e0e0e0;
-            border-radius: 8px;
-            background: white;
-            color: #666;
-            text-decoration: none;
-            transition: all 0.3s;
-        }
-        
-        .page-link:hover {
-            border-color: #4FC3F7;
-            color: #4FC3F7;
-        }
-        
-        .page-link.active {
-            background: linear-gradient(90deg, #4FC3F7 0%, #66BB6A 100%);
-            border-color: transparent;
-            color: white;
-        }
-        
-        .no-artikel {
-            text-align: center;
-            padding: 60px 20px;
-            color: #999;
-        }
-        
-        .no-artikel-icon {
-            font-size: 64px;
-            margin-bottom: 20px;
-        }
-        
-        @media (max-width: 1200px) {
-            .content-grid {
-                grid-template-columns: 1fr;
-            }
-        }
-        
-        @media (max-width: 768px) {
-            .sidebar {
-                width: 200px;
-            }
-            
-            .main-content {
-                margin-left: 200px;
-                padding: 20px;
-            }
-            
-            .artikel-grid {
-                grid-template-columns: 1fr;
-            }
-        }
+        /* Polished sidebar 'Artikel Populer' visuals */
+        .sidebar-widget .widget-title { display:flex; align-items:center; gap:8px; font-size:16px; margin-bottom:12px; color:#0f172a; }
+        .sidebar-widget .populer-item {
+            display:flex;
+            gap:12px;
+            align-items:center;
+            background:#ffffff;
+            padding:10px;
+            border-radius:10px;
+            box-shadow: 0 2px 8px rgba(2,6,23,0.04);
+            margin-bottom:10px;
+            transition: transform .12s ease, box-shadow .12s ease;
+        }
+        .sidebar-widget .populer-item:hover { transform: translateY(-3px); box-shadow: 0 8px 20px rgba(2,6,23,0.06); }
+        .populer-image { width:64px; height:64px; flex:0 0 64px; border-radius:8px; overflow:hidden; display:flex; align-items:center; justify-content:center; background:#f8fafc; }
+        .populer-image img { width:100%; height:100%; object-fit:cover; display:block; }
+        .populer-content { flex:1; min-width:0; }
+        .populer-title { font-size:14px; font-weight:600; color:#0f172a; margin:0 0 6px; line-height:1.25; }
+        .populer-title a { color:inherit; text-decoration:none; }
+        .populer-views { font-size:13px; color:#64748b; display:flex; align-items:center; gap:8px; }
+        /* Empty state card for no results */
+        .no-article-card.card { background: #ffffff; border-radius: 12px; box-shadow: 0 2px 10px rgba(2,6,23,0.04); padding: 32px; text-align:center; max-width:560px; margin: 24px auto; }
+        .no-article-icon { font-size:48px; margin-bottom:12px; }
+        .no-article-card h3 { color:#0f172a; margin-bottom:8px; font-size:20px; }
+        .no-article-card p { color:#64748b; margin-bottom:16px; }
+        .no-article-card .btn { padding:8px 18px; border-radius:20px; background:linear-gradient(90deg,#4FC3F7 0%,#66BB6A 100%); color:white; text-decoration:none; font-weight:600; }
     </style>
 </head>
 <body>
@@ -560,24 +133,44 @@ $artikelPopuler = $stmtPopuler->fetchAll();
     
     <main class="main-content">
         <header class="header">
-            <form class="search-box" method="GET" action="">
+            <div class="search-box">
                 <span class="search-icon">🔍</span>
-                <input type="text" name="search" class="search-input" 
-                       placeholder="Cari artikel..." 
-                       value="<?php echo htmlspecialchars($search); ?>">
-                <?php if ($kategori): ?>
-                    <input type="hidden" name="kategori" value="<?php echo htmlspecialchars($kategori); ?>">
-                <?php endif; ?>
-            </form>
-            
+                <input type="text" class="search-input" name="search" placeholder="Cari artikel, data balita, atau informasi..." value="<?php echo htmlspecialchars($search); ?>">
+            </div>
+
             <div class="user-info">
-                <div class="avatar">👤</div>
+                <div class="lang-selector">
+                    <span>🌐</span>
+                    <span>ID</span>
+                </div>
+
+                <div class="user-avatar">
+                    <div>
+                        <div style="font-weight: 600; font-size: 14px; text-align: right;">
+                            <?php echo htmlspecialchars($user['nama'] ?? ($_SESSION['nama'] ?? '')); ?>
+                        </div>
+                        <div style="font-size: 12px; color: #999; text-align: right;">
+                            <?php
+                                if (($user['role'] ?? '') === 'tenaga_kesehatan') echo 'Tenaga Kesehatan';
+                                elseif (($user['role'] ?? '') === 'admin') echo 'Administrator';
+                                else echo 'Orang Tua';
+                            ?>
+                        </div>
+                    </div>
+                    <div class="avatar">👤</div>
+                </div>
             </div>
         </header>
         
-        <div class="page-header">
+        <div class="page-title">
             <h1>Artikel & Tips Kesehatan</h1>
             <p class="page-subtitle">Informasi terkini seputar nutrisi dan tumbuh kembang bayi</p>
+        </div>
+            <?php if (in_array($user['role'], ['tenaga_kesehatan','admin'])): ?>
+            <div style="margin-top:8px;">
+                <a href="artikel_create.php" class="btn" style="padding:8px 12px;border-radius:8px;background:linear-gradient(90deg,#4FC3F7,#66BB6A);color:white;text-decoration:none;">+ Buat Artikel</a>
+            </div>
+            <?php endif; ?>
         </div>
         
         <div class="filter-section">
@@ -652,11 +245,28 @@ $artikelPopuler = $stmtPopuler->fetchAll();
                                             </span>
                                         </div>
                                         
-                                        <button class="bookmark-btn" 
-                                                onclick="toggleBookmark(<?php echo $artikel['id']; ?>, this)"
-                                                data-bookmarked="<?php echo isset($artikel['is_bookmarked']) ? (int)$artikel['is_bookmarked'] : 0; ?>">
-                                            <?php echo (isset($artikel['is_bookmarked']) && $artikel['is_bookmarked']) ? '🔖' : '📑'; ?>
-                                        </button>
+                                        <div style="display:flex; gap:8px; align-items:center;">
+                                            <?php
+                                            // Determine if current user may edit/delete this article
+                                            $canManage = false;
+                                            if ($user['role'] === 'admin') {
+                                                $canManage = true;
+                                            } elseif ($user['role'] === 'tenaga_kesehatan') {
+                                                // Tenaga may manage articles they authored (penulis = nama akun)
+                                                $canManage = (isset($artikel['penulis']) && $artikel['penulis'] === $user['nama']);
+                                            }
+                                            ?>
+                                            <?php if ($canManage): ?>
+                                                <a href="artikel_edit.php?id=<?php echo $artikel['id']; ?>" title="Edit" style="text-decoration:none; font-size:16px;">✏️</a>
+                                                <a href="artikel_delete.php?id=<?php echo $artikel['id']; ?>" title="Hapus" onclick="return confirm('Hapus artikel ini?')" style="text-decoration:none; font-size:16px;">🗑️</a>
+                                            <?php else: ?>
+                                                <button class="bookmark-btn" 
+                                                        onclick="toggleBookmark(<?php echo $artikel['id']; ?>, this)"
+                                                        data-bookmarked="<?php echo isset($artikel['is_bookmarked']) ? (int)$artikel['is_bookmarked'] : 0; ?>">
+                                                    <?php echo (isset($artikel['is_bookmarked']) && $artikel['is_bookmarked']) ? '🔖' : '📑'; ?>
+                                                </button>
+                                            <?php endif; ?>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -684,10 +294,11 @@ $artikelPopuler = $stmtPopuler->fetchAll();
                         </div>
                     <?php endif; ?>
                 <?php else: ?>
-                    <div class="no-artikel">
-                        <div class="no-artikel-icon">📭</div>
+                    <div class="no-article-card card">
+                        <div class="no-article-icon">📭</div>
                         <h3>Tidak ada artikel ditemukan</h3>
                         <p>Coba ubah filter atau kata kunci pencarian Anda</p>
+                        <a href="artikel.php" class="btn" style="margin-top:6px; display:inline-block;">Reset Filter</a>
                     </div>
                 <?php endif; ?>
             </div>
@@ -742,4 +353,4 @@ $artikelPopuler = $stmtPopuler->fetchAll();
         }
     </script>
 </body>
-</html
+</html>

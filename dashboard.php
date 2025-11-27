@@ -102,6 +102,24 @@ $stmt->execute();
 $result = $stmt->fetch();
 $artikel_baru = $result['total'];
 
+// Hitung total artikel published (untuk menampilkan jumlah artikel keseluruhan)
+$stmt = $conn->prepare("SELECT COUNT(*) as total FROM artikel WHERE status = 'published'");
+$stmt->execute();
+$result = $stmt->fetch();
+$artikel_total = $result['total'];
+
+// Ambil artikel terbaru yang dipublikasikan (tampilkan di dashboard)
+$latest_artikel = [];
+$stmt = $conn->prepare("SELECT id_artikel, judul_artikel, tgl_terbit FROM artikel WHERE status = 'published' ORDER BY tgl_terbit DESC LIMIT 3");
+$stmt->execute();
+while ($row = $stmt->fetch()) {
+    $latest_artikel[] = [
+        'id' => $row['id_artikel'],
+        'judul' => $row['judul_artikel'],
+        'tgl' => $row['tgl_terbit']
+    ];
+}
+
 // Ambil aktivitas terbaru dari pertumbuhan, asupan, dan riwayat interaksi
 $aktivitas = [];
 
@@ -164,20 +182,35 @@ usort($aktivitas, function($a, $b) {
     return strcmp($b['waktu'], $a['waktu']);
 });
 
-// Ambil jadwal mendatang untuk user yang login
-$stmt = $conn->prepare("
-    SELECT j.*, b.nama_balita, b.id_balita,
-           DATE_FORMAT(j.tanggal, '%d %b %Y - %H:%i') as formatted_date
-    FROM jadwal j
-    JOIN balita b ON j.id_balita = b.id_balita
-    WHERE b.id_akun = ? 
-    AND j.tanggal >= CURDATE()
-    AND j.status = 'terjadwal'
-    ORDER BY j.tanggal ASC
-    LIMIT 5
-");
-$stmt->execute([$_SESSION['id_akun']]);
+// Ambil jadwal mendatang untuk user yang login (role-aware)
 $jadwal = [];
+if ($user['role'] == 'pengguna') {
+    $stmt = $conn->prepare("
+        SELECT j.*, b.nama_balita, b.id_balita,
+               DATE_FORMAT(j.tanggal, '%d %b %Y - %H:%i') as formatted_date
+        FROM jadwal j
+        JOIN balita b ON j.id_balita = b.id_balita
+        WHERE b.id_akun = ?
+        AND j.tanggal >= NOW()
+        AND j.status = 'terjadwal'
+        ORDER BY j.tanggal ASC
+        LIMIT 5
+    ");
+    $stmt->execute([$_SESSION['id_akun']]);
+} else {
+    $stmt = $conn->prepare("
+        SELECT j.*, b.nama_balita, b.id_balita,
+               DATE_FORMAT(j.tanggal, '%d %b %Y - %H:%i') as formatted_date
+        FROM jadwal j
+        JOIN balita b ON j.id_balita = b.id_balita
+        WHERE j.tanggal >= NOW()
+        AND j.status = 'terjadwal'
+        ORDER BY j.tanggal ASC
+        LIMIT 5
+    ");
+    $stmt->execute();
+}
+
 while ($row = $stmt->fetch()) {
     $jadwal[] = [
         'judul' => htmlspecialchars($row['jenis']),
@@ -701,8 +734,8 @@ function getTimeAgo($timestamp) {
             
             <div class="stat-card">
                 <div class="stat-info">
-                    <h3>Artikel Baru</h3>
-                    <div class="stat-value"><?php echo $artikel_baru; ?></div>
+                    <h3>Total Artikel</h3>
+                    <div class="stat-value"><?php echo $artikel_total; ?></div>
                 </div>
                 <div class="stat-icon teal">📄</div>
             </div>
@@ -800,15 +833,25 @@ function getTimeAgo($timestamp) {
                 </div>
                 <h3>Artikel & Tips</h3>
                 <p>Akses informasi dan tips seputar nutrisi dan kesehatan balita dari ahli</p>
-                <?php if ($artikel_baru > 0): ?>
-                <div style="margin-top: 15px; background: rgba(255,255,255,0.2); padding: 10px 15px; border-radius: 8px; font-size: 13px;">
-                    <?php echo $artikel_baru; ?> artikel baru dalam minggu ini
+                <?php if (count($latest_artikel) > 0): ?>
+                <div style="margin-top: 15px; background: rgba(255,255,255,0.08); padding: 12px 15px; border-radius: 8px; font-size: 14px; color: white;">
+                    <ul style="list-style:none; padding:0; margin:0;">
+                        <?php foreach ($latest_artikel as $a): ?>
+                        <li style="margin-bottom:10px;">
+                            <a href="artikel_detail.php?id=<?php echo $a['id']; ?>" style="color: #fff; text-decoration: underline; font-weight:600;">
+                                <?php echo htmlspecialchars($a['judul']); ?>
+                            </a>
+                            <div style="font-size:12px; opacity:0.85; margin-top:4px;"><?php echo date('d M Y', strtotime($a['tgl'])); ?></div>
+                        </li>
+                        <?php endforeach; ?>
+                    </ul>
+                    <div style="margin-top:8px; font-size:13px; opacity:0.95;"><?php echo $artikel_baru; ?> artikel baru minggu ini</div>
                 </div>
                 <?php else: ?>
-                <div style="margin-top: 15px; background: rgba(255,255,255,0.2); padding: 10px 15px; border-radius: 8px; font-size: 13px; text-align:center;">
+                <div style="margin-top: 15px; background: rgba(255,255,255,0.12); padding: 10px 15px; border-radius: 8px; font-size: 13px; text-align:center; color: white;">
                     <div style="font-size:32px; margin-bottom:10px;">📚</div>
-                    <div style="color:#333; font-weight:600; margin-bottom:5px;">Belum ada artikel baru</div>
-                    <div style="color:#666; margin-bottom:10px;">Artikel dan tips akan muncul di sini jika tersedia.</div>
+                    <div style="font-weight:600; margin-bottom:5px;">Belum ada artikel baru</div>
+                    <div style="opacity:0.9; margin-bottom:10px;">Artikel dan tips akan muncul di sini jika tersedia.</div>
                     <a href="artikel.php" class="btn btn-primary" style="padding:10px 30px; border-radius:25px; background:linear-gradient(90deg,#BA68C8 0%,#9C27B0 100%); color:white; text-decoration:none; font-weight:600;">Lihat Artikel</a>
                 </div>
                 <?php endif; ?>

@@ -127,10 +127,13 @@ if (is_array($jadwal_list)) {
     }
 }
 
-// Get jadwal mendatang (7 hari ke depan)
-$query_upcoming_base = "SELECT * FROM jadwal WHERE status = 'terjadwal' AND tanggal BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 7 DAY)";
+// Get jadwal mendatang (7 hari ke depan) and include balita name
+$query_upcoming_base = "SELECT j.*, b.nama_balita
+                       FROM jadwal j
+                       LEFT JOIN balita b ON j.id_balita = b.id_balita
+                       WHERE j.status = 'terjadwal' AND j.tanggal BETWEEN NOW() AND DATE_ADD(NOW(), INTERVAL 7 DAY)";
 if ($selected_balita !== null && $selected_balita > 0) {
-    $query_upcoming = $query_upcoming_base . " AND id_balita = ? ORDER BY tanggal ASC LIMIT 3";
+    $query_upcoming = $query_upcoming_base . " AND j.id_balita = ? ORDER BY j.tanggal ASC LIMIT 3";
     $stmt_upcoming = $conn->prepare($query_upcoming);
     try {
         $stmt_upcoming->execute([$selected_balita]);
@@ -140,7 +143,7 @@ if ($selected_balita !== null && $selected_balita > 0) {
     }
 } else {
     // For nakes/admin showing all upcoming
-    $query_upcoming = $query_upcoming_base . " ORDER BY tanggal ASC LIMIT 3";
+    $query_upcoming = $query_upcoming_base . " ORDER BY j.tanggal ASC LIMIT 3";
     $stmt_upcoming = $conn->prepare($query_upcoming);
     try {
         $stmt_upcoming->execute([]);
@@ -240,781 +243,42 @@ function hitungUmur($tanggal_lahir) {
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Jadwal Imunisasi & Konsultasi - NutriGrow</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #f8fafc;
-            color: #1e293b;
-        }
-
-        .container {
-            display: flex;
-            min-height: 100vh;
-        }
-
-        /* Sidebar */
-        .sidebar {
-            width: 240px;
-            background: white;
-            padding: 24px 16px;
-            box-shadow: 2px 0 8px rgba(0,0,0,0.04);
-            position: fixed;
-            height: 100vh;
-            overflow-y: auto;
-        }
-
-        .logo {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px;
-            margin-bottom: 32px;
-        }
-
-        .logo-icon {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 20px;
-        }
-
-        .logo-text {
-            font-size: 20px;
-            font-weight: 700;
-            color: #0f172a;
-        }
-
-        .nav-menu {
-            list-style: none;
-        }
-
-        .nav-item {
-            margin-bottom: 4px;
-        }
-
-        .nav-link {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            padding: 12px 16px;
-            border-radius: 10px;
-            text-decoration: none;
-            color: #64748b;
-            transition: all 0.2s;
-            font-size: 14px;
-        }
-
-        .nav-link:hover {
-            background: #f1f5f9;
-            color: #0f172a;
-        }
-
-        .nav-link.active {
-            background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
-            color: white;
-        }
-
-        .nav-link i {
-            width: 20px;
-            text-align: center;
-        }
-
-        .nav-divider {
-            height: 1px;
-            background: #e2e8f0;
-            margin: 20px 0;
-        }
-
-        .nav-link.logout {
-            color: #ef4444;
-        }
-
-        .nav-link.logout:hover {
-            background: #fef2f2;
-        }
-
-        /* Main Content */
-        .main-content {
-            margin-left: 240px;
-            flex: 1;
-            padding: 24px 40px;
-        }
-
-        /* Header */
-        .header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 32px;
-        }
-
-        .search-bar {
-            flex: 1;
-            max-width: 500px;
-            position: relative;
-        }
-
-        .search-input {
-            width: 100%;
-            padding: 12px 16px 12px 44px;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
-            font-size: 14px;
-            transition: all 0.2s;
-        }
-
-        .search-input:focus {
-            outline: none;
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
-
-        .search-bar::before {
-            content: '\f002';
-            font-family: 'Font Awesome 6 Free';
-            font-weight: 900;
-            position: absolute;
-            left: 16px;
-            top: 50%;
-            transform: translateY(-50%);
-            color: #94a3b8;
-        }
-
-        .user-profile {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-        }
-
-        .lang-btn {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            padding: 8px 12px;
-            background: white;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            font-size: 14px;
-            color: #64748b;
-            cursor: pointer;
-        }
-
-        .user-info-header {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .user-details {
-            text-align: right;
-        }
-
-        .user-details h4 {
-            font-size: 14px;
-            font-weight: 600;
-            color: #0f172a;
-        }
-
-        .user-details p {
-            font-size: 12px;
-            color: #64748b;
-        }
-
-        .user-avatar {
-            width: 40px;
-            height: 40px;
-            background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-        }
-
-        /* Page Header */
-        .page-header {
-            margin-bottom: 32px;
-        }
-
-        .page-header h1 {
-            font-size: 32px;
-            font-weight: 700;
-            color: #0f172a;
-            margin-bottom: 8px;
-        }
-
-        .page-subtitle {
-            font-size: 14px;
-            color: #64748b;
-        }
-
-        /* Balita Selector */
-        .balita-selector {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-            margin-bottom: 24px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-
-        .balita-info {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-        }
-
-        .balita-avatar {
-            width: 60px;
-            height: 60px;
-            background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
-            border-radius: 50%;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: white;
-            font-size: 24px;
-        }
-
-        .balita-details h3 {
-            font-size: 18px;
-            font-weight: 600;
-            color: #0f172a;
-            margin-bottom: 4px;
-        }
-
-        .balita-details p {
-            font-size: 13px;
-            color: #64748b;
-        }
-
-        .btn-primary {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 20px;
-            background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
-            color: white;
-            border: none;
-            border-radius: 10px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-            text-decoration: none;
-            transition: transform 0.2s;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-        }
-
-        /* Stats Grid */
-        .stats-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-            gap: 20px;
-            margin-bottom: 32px;
-        }
-
-        .stat-card {
-            background: white;
-            padding: 24px;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-        }
-
-        .stat-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 12px;
-        }
-
-        .stat-label {
-            font-size: 13px;
-            color: #64748b;
-            font-weight: 500;
-        }
-
-        .stat-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 18px;
-        }
-
-        .stat-icon.blue { background: #dbeafe; color: #1e40af; }
-        .stat-icon.green { background: #d1fae5; color: #065f46; }
-        .stat-icon.purple { background: #f3e8ff; color: #6b21a8; }
-        .stat-icon.yellow { background: #fef3c7; color: #92400e; }
-
-        .stat-value {
-            font-size: 32px;
-            font-weight: 700;
-            color: #0f172a;
-        }
-
-        /* Filter Section */
-        .filter-section {
-            background: white;
-            padding: 20px;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-            margin-bottom: 24px;
-        }
-
-        .filter-tabs {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-
-        .filter-tab {
-            padding: 10px 20px;
-            border: 2px solid #e2e8f0;
-            border-radius: 10px;
-            background: white;
-            color: #64748b;
-            text-decoration: none;
-            font-size: 14px;
-            font-weight: 500;
-            transition: all 0.2s;
-        }
-
-        .filter-tab:hover {
-            border-color: #3b82f6;
-            color: #3b82f6;
-        }
-
-        .filter-tab.active {
-            background: linear-gradient(135deg, #3b82f6 0%, #06b6d4 100%);
-            border-color: transparent;
-            color: white;
-        }
-
-        /* Content Layout */
-        .content-layout {
-            display: grid;
-            grid-template-columns: 1fr 350px;
-            gap: 24px;
-        }
-
-        /* Jadwal List */
-        .jadwal-list {
-            display: flex;
-            flex-direction: column;
-            gap: 16px;
-        }
-
-        .jadwal-card {
-            background: white;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-            overflow: hidden;
-            transition: all 0.3s;
-        }
-
-        .jadwal-card:hover {
-            box-shadow: 0 8px 16px rgba(0,0,0,0.12);
-        }
-
-        .jadwal-header {
-            padding: 20px;
-            border-left: 4px solid;
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-        }
-
-        .jadwal-header.imunisasi { border-color: #3b82f6; }
-        .jadwal-header.konsultasi { border-color: #10b981; }
-        .jadwal-header.pemeriksaan { border-color: #06b6d4; }
-        .jadwal-header.posyandu { border-color: #f59e0b; }
-
-        .jadwal-info {
-            flex: 1;
-        }
-
-        .jadwal-type {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 12px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 600;
-            margin-bottom: 12px;
-        }
-
-        .type-primary { background: #dbeafe; color: #1e40af; }
-        .type-success { background: #d1fae5; color: #065f46; }
-        .type-info { background: #cffafe; color: #155e75; }
-        .type-warning { background: #fef3c7; color: #92400e; }
-
-        .jadwal-title {
-            font-size: 18px;
-            font-weight: 600;
-            color: #0f172a;
-            margin-bottom: 8px;
-        }
-
-        .jadwal-desc {
-            font-size: 14px;
-            color: #64748b;
-            line-height: 1.6;
-            margin-bottom: 16px;
-        }
-
-        .jadwal-meta {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 20px;
-            font-size: 13px;
-            color: #64748b;
-        }
-
-        .meta-item {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-
-        .meta-item i {
-            color: #94a3b8;
-        }
-
-        .jadwal-status {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            align-items: flex-end;
-        }
-
-        .status-badge {
-            padding: 6px 12px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 600;
-        }
-
-        .badge-warning { background: #fef3c7; color: #92400e; }
-        .badge-success { background: #d1fae5; color: #065f46; }
-        .badge-danger { background: #fee2e2; color: #991b1b; }
-        .badge-secondary { background: #f1f5f9; color: #64748b; }
-
-        .jadwal-actions {
-            display: flex;
-            gap: 8px;
-            margin-top: 8px;
-        }
-
-        .action-btn-sm {
-            width: 32px;
-            height: 32px;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            background: white;
-            color: #64748b;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .action-btn-sm:hover {
-            border-color: #3b82f6;
-            color: #3b82f6;
-        }
-
-        /* Sidebar Widgets */
-        .sidebar-widget {
-            background: white;
-            padding: 24px;
-            border-radius: 12px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
-            margin-bottom: 20px;
-        }
-
-        .widget-title {
-            font-size: 16px;
-            font-weight: 600;
-            color: #0f172a;
-            margin-bottom: 16px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .upcoming-item {
-            padding: 16px;
-            background: #f8fafc;
-            border-radius: 10px;
-            margin-bottom: 12px;
-            border-left: 3px solid #3b82f6;
-        }
-
-        .upcoming-item:last-child {
-            margin-bottom: 0;
-        }
-
-        .upcoming-date {
-            font-size: 12px;
-            color: #3b82f6;
-            font-weight: 600;
-            margin-bottom: 6px;
-        }
-
-        .upcoming-title {
-            font-size: 14px;
-            font-weight: 600;
-            color: #0f172a;
-            margin-bottom: 4px;
-        }
-
-        .upcoming-location {
-            font-size: 12px;
-            color: #64748b;
-        }
-
-        /* Rekomendasi List */
-        .rekomendasi-item {
-            display: flex;
-            gap: 12px;
-            padding: 12px;
-            background: #f8fafc;
-            border-radius: 8px;
-            margin-bottom: 8px;
-        }
-
-        .rekomendasi-item:last-child {
-            margin-bottom: 0;
-        }
-
-        .rekomendasi-icon {
-            width: 40px;
-            height: 40px;
-            background: #dbeafe;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            color: #1e40af;
-            flex-shrink: 0;
-        }
-
-        .rekomendasi-content {
-            flex: 1;
-        }
-
-        .rekomendasi-name {
-            font-size: 14px;
-            font-weight: 600;
-            color: #0f172a;
-            margin-bottom: 2px;
-        }
-
-        .rekomendasi-age {
-            font-size: 12px;
-            color: #64748b;
-        }
-
-        /* Empty State */
-        .empty-state {
-            text-align: center;
-            padding: 60px 20px;
-            background: white;
-            border-radius: 12px;
-        }
-
-        .empty-state i {
-            font-size: 64px;
-            color: #cbd5e1;
-            margin-bottom: 20px;
-        }
-
-        .empty-state h3 {
-            font-size: 20px;
-            color: #64748b;
-            margin-bottom: 8px;
-        }
-
-        .empty-state p {
-            color: #94a3b8;
-            font-size: 14px;
-        }
-
-        /* Modal */
-        .modal {
-            display: none;
-            position: fixed;
-            z-index: 1000;
-            left: 0;
-            top: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.5);
-            align-items: center;
-            justify-content: center;
-        }
-
-        .modal.active {
-            display: flex;
-        }
-
-        .modal-content {
-            background: white;
-            padding: 32px;
-            border-radius: 16px;
-            max-width: 500px;
-            width: 90%;
-            max-height: 90vh;
-            overflow-y: auto;
-        }
-
-        .modal-header {
-            margin-bottom: 24px;
-        }
-
-        .modal-header h2 {
-            font-size: 24px;
-            font-weight: 700;
-            color: #0f172a;
-        }
-
-        .form-group {
-            margin-bottom: 20px;
-        }
-
-        .form-label {
-            display: block;
-            font-size: 14px;
-            font-weight: 600;
-            color: #0f172a;
-            margin-bottom: 8px;
-        }
-
-        .form-input,
-        .form-select,
-        .form-textarea {
-            width: 100%;
-            padding: 12px 16px;
-            border: 1px solid #e2e8f0;
-            border-radius: 10px;
-            font-size: 14px;
-            transition: all 0.2s;
-        }
-
-        .form-input:focus,
-        .form-select:focus,
-        .form-textarea:focus {
-            outline: none;
-            border-color: #3b82f6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
-        }
-
-        .form-textarea {
-            min-height: 100px;
-            resize: vertical;
-        }
-
-        .modal-actions {
-            display: flex;
-            gap: 12px;
-            justify-content: flex-end;
-            margin-top: 24px;
-        }
-
-        .btn-secondary {
-            padding: 10px 20px;
-            background: #f1f5f9;
-            color: #64748b;
-            border: none;
-            border-radius: 10px;
-            font-size: 14px;
-            font-weight: 600;
-            cursor: pointer;
-        }
-
-        .btn-secondary:hover {
-            background: #e2e8f0;
-        }
-
-        @media (max-width: 1024px) {
-            .content-layout {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        @media (max-width: 768px) {
-            .sidebar {
-                width: 70px;
-            }
-
-            .sidebar .logo-text,
-            .sidebar .nav-link span {
-                display: none;
-            }
-
-            .main-content {
-                margin-left: 70px;
-                padding: 20px;
-            }
-
-            .stats-grid {
-                grid-template-columns: repeat(2, 1fr);
-            }
-        }
-    </style>
+    <?php include __DIR__ . '/partials/common_head.php'; ?>
 </head>
 <body>
-    <div class="container">
-        <?php include __DIR__ . '/partials/sidebar.php'; ?>
+    <?php include __DIR__ . '/partials/sidebar.php'; ?>
 
-        <!-- Main Content -->
-        <main class="main-content">
+    <!-- Main Content -->
+    <main class="main-content">
             <!-- Header -->
             <header class="header">
-                <div class="search-bar">
+                <div class="search-box">
+                    <span class="search-icon">🔍</span>
                     <input type="text" class="search-input" placeholder="Cari jadwal imunisasi atau konsultasi...">
                 </div>
 
-                <div class="user-profile">
-                    <button class="lang-btn">
-                        <i class="fas fa-globe"></i>
+                <div class="user-info">
+                    <div class="lang-selector">
+                        <span>🌐</span>
                         <span>ID</span>
-                    </button>
+                    </div>
 
-                    <div class="user-info-header">
-                        <div class="user-details">
-                            <h4><?php echo htmlspecialchars($user['nama'] ?? ($_SESSION['nama'] ?? '')); ?></h4>
-                            <p><?php echo htmlspecialchars($user['role_label'] ?? 'Orang Tua'); ?></p>
+                    <div class="user-avatar">
+                        <div>
+                            <div style="font-weight: 600; font-size: 14px; text-align: right;">
+                                <?php echo htmlspecialchars($user['nama'] ?? ($_SESSION['nama'] ?? '')); ?>
+                            </div>
+                            <div style="font-size: 12px; color: #999; text-align: right;">
+                                <?php echo htmlspecialchars($user['role_label'] ?? 'Orang Tua'); ?>
+                            </div>
                         </div>
-                        <div class="user-avatar">
-                            <i class="fas fa-user"></i>
-                        </div>
+                        <div class="avatar">👤</div>
                     </div>
                 </div>
             </header>
 
-            <!-- Page Header -->
-            <div class="page-header">
+            <!-- Page Title -->
+            <div class="page-title">
                 <h1>Jadwal Imunisasi & Konsultasi</h1>
                 <p class="page-subtitle">Kelola jadwal imunisasi dan konsultasi kesehatan balita Anda</p>
             </div>
@@ -1063,53 +327,238 @@ function hitungUmur($tanggal_lahir) {
                             </form>
                         </div>
                     <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'tenaga_kesehatan'): ?>
-                        <button class="btn-primary" onclick="openTambahModal()">
+                        <button class="btn-primary" style="border:none;" onclick="openTambahModal()">
                             <i class="fas fa-plus"></i>
                             <span>Tambah Jadwal</span>
                         </button>
                     <?php endif; ?>
+                    <style>
+                        .balita-avatar {
+                            width: 50px;
+                            height: 50px;
+                            border-radius: 50%;
+                            background: linear-gradient(135deg, #4FC3F7 0%, #66BB6A 100%);
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            color: white;
+                            font-size: 24px;
+                            flex-shrink: 0;
+                        }
+
+                        /* Jadwal card styles to match dashboard palette */
+                        .jadwal-card {
+                            background: white;
+                            padding: 18px;
+                            border-radius: 12px;
+                            box-shadow: 0 2px 10px rgba(0,0,0,0.04);
+                            margin-bottom: 16px;
+                        }
+
+                        .jadwal-card .card-header {
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: flex-start;
+                            margin-bottom: 8px;
+                        }
+
+                        .jadwal-for {
+                            font-size: 12px;
+                            font-weight: 600;
+                            color: #64748b; /* dashboard gray */
+                            text-transform: uppercase;
+                            letter-spacing: .5px;
+                            margin-bottom: 6px;
+                        }
+
+                        .jadwal-type {
+                            font-size: 12px;
+                            padding: 4px 10px;
+                            border-radius: 20px;
+                            background: #f1f5f9;
+                            color: #334155;
+                            display: inline-flex;
+                            align-items: center;
+                            gap: 8px;
+                        }
+
+                        .jadwal-title {
+                            font-size: 18px;
+                            font-weight: 600;
+                            color: #111827; /* darker title */
+                            margin: 8px 0;
+                            line-height: 1.4;
+                        }
+
+                        .jadwal-desc {
+                            font-size: 14px;
+                            color: #64748b;
+                            margin: 0 0 12px 0;
+                            line-height: 1.5;
+                        }
+
+                        .jadwal-meta .meta-item {
+                            font-size: 13px;
+                            color: #475569;
+                            display: flex;
+                            align-items: center;
+                            gap: 8px;
+                            margin-bottom: 6px;
+                        }
+
+                        .status-badge { padding: 6px 10px; border-radius: 8px; font-weight: 600; font-size:12px; display:inline-block; }
+                        .status-badge.badge-warning { background: #FFFBEB; color: #92400E; }
+                        .status-badge.badge-success { background: #ECFDF5; color: #166534; }
+                        .status-badge.badge-danger { background: #FEF2F2; color: #991B1B; }
+                        .status-badge.badge-secondary { background: #F8FAFC; color: #475569; }
+
+                        .jadwal-actions { display:flex; gap:8px; justify-content:flex-end; margin-top:12px; }
+
+                        .card .action-btn-sm { font-size:13px; padding:8px 12px; border-radius:6px; border:none; cursor:pointer; }
+
+                        /* Ensure primary buttons are borderless and without heavy shadow */
+                        .btn-primary { border: none !important; box-shadow: none !important; }
+                        .btn { box-shadow: none !important; }
+
+                        /* Toning down upcoming item colors and improve placement */
+                        .upcoming-title { color: #0f172a !important; }
+                        .date-text { color: #64748b !important; }
+                        /* Upcoming / Jadwal Mendatang widget styles */
+                        .sidebar-widget .upcoming-item {
+                            display: flex;
+                            gap: 14px;
+                            align-items: center;
+                            background: #ffffff;
+                            padding: 12px;
+                            border-radius: 12px;
+                            box-shadow: 0 2px 8px rgba(2,6,23,0.04);
+                            margin-bottom: 12px;
+                            transition: background .12s ease, transform .06s ease;
+                        }
+
+                        .sidebar-widget .upcoming-item:hover {
+                            background: #fbfdff;
+                            transform: translateY(-2px);
+                        }
+
+                        .upcoming-left { flex: 0 0 56px; display:flex; align-items:center; justify-content:center; }
+
+                        .upcoming-date {
+                            display: flex;
+                            flex-direction: column;
+                            align-items: center;
+                            gap: 6px;
+                        }
+
+                        .date-icon {
+                            width: 44px;
+                            height: 44px;
+                            border-radius: 10px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            background: linear-gradient(135deg, #f1f5f9 0%, #f8fafc 100%);
+                            color: #0f172a;
+                            font-size: 16px;
+                        }
+
+                        .date-text { font-size: 12px; color: #64748b; text-align:center; }
+
+                        .upcoming-body { flex: 1 1 auto; min-width:0; }
+
+                        .upcoming-title { font-size: 16px; font-weight: 600; color: #0f172a; margin-bottom: 4px; line-height:1.25; }
+
+                        .upcoming-sub { font-size: 13px; color: #475569; margin-bottom: 6px; }
+
+                        .upcoming-location { font-size: 13px; color: #94a3b8; display:flex; align-items:center; gap:8px; }
+                        
+                        /* Stats cards styling (so numbers feel softer and aligned with dashboard) */
+                        .stats-grid {
+                            display: grid;
+                            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+                            gap: 20px;
+                            margin-bottom: 20px;
+                        }
+
+                        .stat-card {
+                            position: relative;
+                            background: white;
+                            padding: 20px;
+                            border-radius: 12px;
+                            box-shadow: 0 2px 8px rgba(2,6,23,0.04);
+                            display: flex;
+                            justify-content: space-between;
+                            align-items: center;
+                        }
+
+                        .stat-card .stat-info h3 {
+                            margin: 0 0 8px 0;
+                            font-size: 14px;
+                            color: #64748b; /* softer gray like dashboard */
+                            font-weight: 600;
+                        }
+
+                        .stat-card .stat-info .stat-value {
+                            font-size: 32px;
+                            font-weight: 700;
+                            color: #111827; /* prominent but not harsh black */
+                            line-height: 1;
+                        }
+
+                        .stat-icon {
+                            width: 56px;
+                            height: 56px;
+                            border-radius: 12px;
+                            display: flex;
+                            align-items: center;
+                            justify-content: center;
+                            font-size: 26px;
+                            flex-shrink: 0;
+                        }
+
+                        .stat-icon.blue { background: #e3f2fd; }
+                        .stat-icon.green { background: #e8f5e9; }
+                        .stat-icon.purple { background: #f3e5f5; }
+                        .stat-icon.teal { background: #e0f2f1; }
+
+                        /* Empty state card */
+                        .empty-card.card { background: white; border-radius: 12px; box-shadow: 0 2px 10px rgba(2,6,23,0.04); margin: 12px 0; }
+                        .empty-icon { width:72px; height:72px; border-radius:12px; display:flex; align-items:center; justify-content:center; font-size:34px; background: linear-gradient(135deg,#eef2ff 0%, #e6fffa 100%); color:#044E54; margin:auto; }
+                    </style>
                 </div>
 
-                <!-- Stats Grid -->
+                <!-- Stats Cards -->
                 <div class="stats-grid">
                     <div class="stat-card">
-                        <div class="stat-header">
-                            <span class="stat-label">Total Jadwal</span>
-                            <div class="stat-icon blue">
-                                <i class="fas fa-calendar"></i>
-                            </div>
+                        <div class="stat-info">
+                            <h3>Total Jadwal</h3>
+                            <div class="stat-value"><?php echo $stats['total']; ?></div>
                         </div>
-                        <div class="stat-value"><?php echo $stats['total']; ?></div>
+                        <div class="stat-icon purple">📅</div>
                     </div>
 
                     <div class="stat-card">
-                        <div class="stat-header">
-                            <span class="stat-label">Terjadwal</span>
-                            <div class="stat-icon yellow">
-                                <i class="fas fa-clock"></i>
-                            </div>
+                        <div class="stat-info">
+                            <h3>Terjadwal</h3>
+                            <div class="stat-value"><?php echo $stats['terjadwal']; ?></div>
                         </div>
-                        <div class="stat-value"><?php echo $stats['terjadwal']; ?></div>
+                        <div class="stat-icon blue">⏰</div>
                     </div>
 
                     <div class="stat-card">
-                        <div class="stat-header">
-                            <span class="stat-label">Imunisasi</span>
-                            <div class="stat-icon purple">
-                                <i class="fas fa-syringe"></i>
-                            </div>
+                        <div class="stat-info">
+                            <h3>Imunisasi</h3>
+                            <div class="stat-value"><?php echo $stats['imunisasi']; ?></div>
                         </div>
-                        <div class="stat-value"><?php echo $stats['imunisasi']; ?></div>
+                        <div class="stat-icon green">💉</div>
                     </div>
 
                     <div class="stat-card">
-                        <div class="stat-header">
-                            <span class="stat-label">Selesai</span>
-                            <div class="stat-icon green">
-                                <i class="fas fa-check-circle"></i>
-                            </div>
+                        <div class="stat-info">
+                            <h3>Selesai</h3>
+                            <div class="stat-value"><?php echo $stats['selesai']; ?></div>
                         </div>
-                        <div class="stat-value"><?php echo $stats['selesai']; ?></div>
+                        <div class="stat-icon teal">✔️</div>
                     </div>
                 </div>
 
@@ -1139,84 +588,70 @@ function hitungUmur($tanggal_lahir) {
                     </div>
                 </div>
 
-                <!-- Content Layout -->
-                <div class="content-layout">
+                <!-- Content Grid -->
+                <div class="content-grid">
                     <!-- Jadwal List -->
                     <div>
                         <?php if (count($jadwal_list) > 0): ?>
                             <div class="jadwal-list">
-                                <?php foreach ($jadwal_list as $jadwal): 
+                                <?php foreach ($jadwal_list as $jadwal):
                                     $status_info = getStatusBadge($jadwal['status']);
                                 ?>
-                                     <div class="jadwal-card" 
-                                         data-id="<?php echo $jadwal['id_jadwal']; ?>"
-                                         data-id_balita="<?php echo $jadwal['id_balita']; ?>"
-                                         data-jenis="<?php echo htmlspecialchars($jadwal['jenis']); ?>"
-                                         data-judul="<?php echo htmlspecialchars($jadwal['judul'] ?? ''); ?>"
-                                         data-tanggal="<?php echo htmlspecialchars($jadwal['tanggal']); ?>"
-                                         data-lokasi="<?php echo htmlspecialchars($jadwal['lokasi'] ?? ''); ?>"
-                                         data-deskripsi="<?php echo htmlspecialchars($jadwal['deskripsi'] ?? $jadwal['catatan_hasil'] ?? ''); ?>">
-                                        <div class="jadwal-header <?php echo $jadwal['jenis']; ?>">
-                                            <div class="jadwal-info">
-                                                <span class="jadwal-type type-<?php echo getJenisColor($jadwal['jenis']); ?>">
+                                    <div class="jadwal-card" data-id="<?php echo $jadwal['id_jadwal']; ?>">
+                                        <div class="card-header">
+                                            <div>
+                                                <div class="jadwal-for">Untuk: <?php echo htmlspecialchars($jadwal['nama_balita'] ?? 'Balita'); ?></div>
+                                                <div class="jadwal-type type-<?php echo getJenisColor($jadwal['jenis']); ?>">
                                                     <i class="fas <?php echo getJenisIcon($jadwal['jenis']); ?>"></i>
                                                     <?php echo ucfirst($jadwal['jenis']); ?>
-                                                </span>
-                                                
-                                                <h3 class="jadwal-title"><?php echo htmlspecialchars($jadwal['judul'] ?? ucfirst($jadwal['jenis'])); ?></h3>
-                                                
-                                                <?php $jadwal_deskripsi = $jadwal['deskripsi'] ?? $jadwal['catatan_hasil'] ?? ''; ?>
-                                                <?php if (!empty($jadwal_deskripsi)): ?>
-                                                    <p class="jadwal-desc"><?php echo htmlspecialchars($jadwal_deskripsi); ?></p>
+                                                </div>
+                                            </div>
+                                            <div>
+                                                <span class="status-badge badge-<?php echo $status_info['class']; ?>"><?php echo $status_info['text']; ?></span>
+                                            </div>
+                                        </div>
+
+                                        <div class="card-body">
+                                            <h3 class="jadwal-title"><?php echo htmlspecialchars($jadwal['judul'] ?? ucfirst($jadwal['jenis'])); ?></h3>
+                                            <?php $jadwal_deskripsi = $jadwal['deskripsi'] ?? $jadwal['catatan_hasil'] ?? ''; ?>
+                                            <?php if (!empty($jadwal_deskripsi)): ?>
+                                                <p class="jadwal-desc"><?php echo htmlspecialchars($jadwal_deskripsi); ?></p>
+                                            <?php endif; ?>
+
+                                            <div class="jadwal-meta">
+                                                <div class="meta-item"><i class="far fa-calendar"></i><span><?php echo formatTanggal($jadwal['tanggal']); ?></span></div>
+                                                <div class="meta-item"><i class="far fa-clock"></i><span><?php echo formatWaktu($jadwal['tanggal']); ?> WIB</span></div>
+                                                <div class="meta-item"><i class="fas fa-location-dot"></i><span><?php echo htmlspecialchars($jadwal['lokasi']); ?></span></div>
+                                            </div>
+                                        </div>
+
+                                        <div class="jadwal-actions">
+                                            <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'tenaga_kesehatan'): ?>
+                                                <button class="action-btn-sm" onclick="editJadwal(<?php echo $jadwal['id_jadwal']; ?>)" title="Edit" style="background:#e0e7ff; color:#3730a3;"><i class="fas fa-edit"></i></button>
+                                                <button class="action-btn-sm" onclick="deleteJadwal(<?php echo $jadwal['id_jadwal']; ?>)" title="Hapus" style="background:#fee2e2; color:#dc2626;"><i class="fas fa-trash"></i></button>
+                                            <?php else: ?>
+                                                <?php if ($jadwal['status'] == 'terjadwal'): ?>
+                                                    <button class="action-btn-sm" onclick="markComplete(<?php echo $jadwal['id_jadwal']; ?>)" title="Tandai Selesai" style="background:#dcfce7; color:#16a34a;"><i class="fas fa-check"></i> Selesai</button>
                                                 <?php endif; ?>
-                                                
-                                                <div class="jadwal-meta">
-                                                    <div class="meta-item">
-                                                        <i class="far fa-calendar"></i>
-                                                        <span><?php echo formatTanggal($jadwal['tanggal']); ?></span>
-                                                    </div>
-                                                    <div class="meta-item">
-                                                        <i class="far fa-clock"></i>
-                                                        <span><?php echo formatWaktu($jadwal['tanggal']); ?> WIB</span>
-                                                    </div>
-                                                    <div class="meta-item">
-                                                        <i class="fas fa-location-dot"></i>
-                                                        <span><?php echo htmlspecialchars($jadwal['lokasi']); ?></span>
-                                                    </div>
-                                                </div>
-                                            </div>
-                                            
-                                            <div class="jadwal-status">
-                                                <span class="status-badge badge-<?php echo $status_info['class']; ?>">
-                                                    <?php echo $status_info['text']; ?>
-                                                </span>
-                                                
-                                                <div class="jadwal-actions">
-                                                    <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'tenaga_kesehatan'): ?>
-                                                        <button class="action-btn-sm" onclick="editJadwal(<?php echo $jadwal['id_jadwal']; ?>)" title="Edit">
-                                                            <i class="fas fa-edit"></i>
-                                                        </button>
-                                                        <button class="action-btn-sm" onclick="deleteJadwal(<?php echo $jadwal['id_jadwal']; ?>)" title="Hapus">
-                                                            <i class="fas fa-trash"></i>
-                                                        </button>
-                                                    <?php else: ?>
-                                                        <?php if ($jadwal['status'] == 'terjadwal'): ?>
-                                                            <button class="action-btn-sm" onclick="markComplete(<?php echo $jadwal['id_jadwal']; ?>)" title="Tandai Selesai">
-                                                                <i class="fas fa-check"></i>
-                                                            </button>
-                                                        <?php endif; ?>
-                                                    <?php endif; ?>
-                                                </div>
-                                            </div>
+                                            <?php endif; ?>
                                         </div>
                                     </div>
                                 <?php endforeach; ?>
                             </div>
                         <?php else: ?>
-                                <div class="empty-state">
-                                    <i class="fas fa-calendar-xmark"></i>
-                                    <h3>Belum ada jadwal</h3>
-                                    <p>Tambahkan jadwal imunisasi atau konsultasi untuk balita Anda saja</p>
+                                <div class="empty-card card">
+                                    <div style="text-align:center; padding:28px 18px;">
+                                        <div class="empty-icon" style="margin:0 auto 12px;">
+                                            📅
+                                        </div>
+                                        <h3 style="color:#111827; margin-bottom:8px;">Belum ada jadwal</h3>
+                                        <p style="color:#64748b; margin-bottom:16px;">Tambahkan jadwal imunisasi atau konsultasi untuk balita Anda saja</p>
+                                        <?php if (isset($_SESSION['role']) && $_SESSION['role'] === 'tenaga_kesehatan'): ?>
+                                            <button class="btn btn-primary" onclick="openTambahModal()" style="padding:8px 18px; border-radius:20px; border:none!important; box-shadow:none!important;"> 
+                                                <i class="fas fa-plus" style="margin-right:8px;"></i> Tambah Jadwal
+                                            </button>
+                                        <?php endif; ?>
+                                    </div>
                                 </div>
                         <?php endif; ?>
                     </div>
@@ -1226,22 +661,26 @@ function hitungUmur($tanggal_lahir) {
                         <!-- Jadwal Mendatang -->
                         <?php if (count($upcoming_list) > 0): ?>
                             <div class="sidebar-widget">
-                                <h3 class="widget-title">
-                                    <i class="fas fa-bell"></i>
-                                    Jadwal Mendatang
-                                </h3>
+                                <div style="display:flex; justify-content:flex-start; align-items:center; margin-bottom:8px;">
+                                    <h3 class="widget-title" style="margin:0; display:flex; gap:8px; align-items:center;">
+                                        <i class="fas fa-bell"></i>
+                                        Jadwal Mendatang
+                                    </h3>
+                                </div>
                                 <?php foreach ($upcoming_list as $upcoming): ?>
-                                    <div class="upcoming-item">
-                                        <div class="upcoming-date">
-                                            <i class="far fa-calendar"></i>
-                                            <?php echo formatTanggal($upcoming['tanggal']); ?> • <?php echo formatWaktu($upcoming['tanggal']); ?>
-                                        </div>
-                                        <div class="upcoming-title"><?php echo htmlspecialchars($upcoming['judul'] ?? ucfirst($upcoming['jenis'])); ?></div>
-                                        <div class="upcoming-location">
-                                            <i class="fas fa-location-dot"></i>
-                                            <?php echo htmlspecialchars($upcoming['lokasi']); ?>
-                                        </div>
-                                    </div>
+                                            <div class="upcoming-item">
+                                                <div class="upcoming-left">
+                                                    <div class="upcoming-date">
+                                                        <span class="date-icon">📅</span>
+                                                        <div class="date-text"><?php echo formatTanggal($upcoming['tanggal']); ?> - <?php echo formatWaktu($upcoming['tanggal']); ?></div>
+                                                    </div>
+                                                </div>
+                                                <div class="upcoming-body">
+                                                    <div class="upcoming-title"><?php echo htmlspecialchars($upcoming['judul'] ?? ucfirst($upcoming['jenis'])); ?></div>
+                                                    <div class="upcoming-sub" style="font-size:13px; color:#64748b; margin-bottom:6px;"><?php echo htmlspecialchars($upcoming['nama_balita'] ?? ''); ?></div>
+                                                    <div class="upcoming-location"><i class="fas fa-location-dot"></i> <?php echo htmlspecialchars($upcoming['lokasi']); ?></div>
+                                                </div>
+                                            </div>
                                 <?php endforeach; ?>
                             </div>
                         <?php endif; ?>
@@ -1280,8 +719,7 @@ function hitungUmur($tanggal_lahir) {
                     </a>
                 </div>
             <?php endif; ?>
-        </main>
-    </div>
+    </main>
 
     <!-- Modal Tambah Jadwal -->
     <div id="tambahJadwal" class="modal">

@@ -66,20 +66,31 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <title>Buat Artikel - NutriGrow</title>
     <style>
-        body { font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif; background:#f5f7fa; }
-        .container { max-width:800px; margin:40px auto; background:white; padding:24px; border-radius:12px; box-shadow:0 6px 24px rgba(0,0,0,0.06); }
-        label{display:block;margin-bottom:6px;font-weight:600}
-        input[type=text], textarea, select{width:100%;padding:10px;border:1px solid #e0e0e0;border-radius:8px;margin-bottom:12px}
-        .btn{background:linear-gradient(90deg,#4FC3F7,#66BB6A);color:white;padding:10px 18px;border:none;border-radius:8px;cursor:pointer}
-        .alert{padding:10px;border-radius:8px;margin-bottom:12px}
-        .alert-error{background:#ffebee;color:#c62828}
-        .alert-success{background:#e8f5e9;color:#2e7d32}
+        * { margin:0; padding:0; box-sizing:border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif; background:#f5f7fa; display:flex; min-height:100vh; }
+        .main-content { margin-left: 240px; flex:1; padding: 20px 40px; }
+        .page-header { display:flex; justify-content:space-between; align-items:center; gap:16px; margin-bottom:20px; }
+        .page-header h2 { margin:0; font-size:24px; color:#333; }
+        .back-btn { color:#666; text-decoration:none; padding:8px 12px; border:1px solid #e0e0e0; border-radius:8px; display:inline-flex; align-items:center; gap:6px; transition:all 0.2s; }
+        .back-btn:hover { background:#f1f5f9; color:#333; }
+        .container { max-width:800px; margin:0 auto; background:white; padding:24px; border-radius:12px; box-shadow:0 2px 10px rgba(0,0,0,0.05); }
+        label { display:block; margin-bottom:6px; font-weight:600; color:#1e293b; }
+        input[type=text], textarea, select { width:100%; padding:10px; border:1px solid #e2e8f0; border-radius:8px; margin-bottom:12px; font-size:14px; }
+        .btn { background:linear-gradient(90deg,#4FC3F7,#66BB6A); color:white; padding:10px 18px; border:none; border-radius:8px; cursor:pointer; font-weight:600; }
+        .btn:hover { transform:translateY(-2px); box-shadow:0 4px 12px rgba(79,195,247,0.2); }
+        .alert { padding:12px 16px; border-radius:8px; margin-bottom:12px; }
+        .alert-error { background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; }
+        .alert-success { background:#d1fae5; color:#059669; border:1px solid #a7f3d0; }
     </style>
 </head>
 <body>
     <?php include __DIR__ . '/partials/sidebar.php'; ?>
-    <div class="container">
+    <main class="main-content">
+    <div class="page-header">
         <h2>Buat Artikel Baru</h2>
+        <a href="artikel.php" class="back-btn">← Kembali</a>
+    </div>
+    <div class="container">
         <p>Anda masuk sebagai <strong><?php echo htmlspecialchars($user['nama']); ?></strong> (Tenaga Kesehatan).</p>
 
         <?php if ($error): ?><div class="alert alert-error"><?php echo $error; ?></div><?php endif; ?>
@@ -111,5 +122,6 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             </div>
         </form>
     </div>
+    </main>
 </body>
 </html>

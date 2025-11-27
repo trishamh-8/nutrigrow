@@ -101,6 +101,9 @@ try {
         $id = (int)($_POST['id'] ?? 0);
         if (!$id) redirect_back($_POST['id_balita'] ?? 0, 'ID jadwal tidak valid.');
 
+        // retrieve id_balita from POST (was missing previously)
+        $id_balita = (int)($_POST['id_balita'] ?? 0);
+
         $jenis = $_POST['jenis'] ?? '';
         $judul = $_POST['judul'] ?? '';
         $tanggal = $_POST['tanggal'] ?? null;
